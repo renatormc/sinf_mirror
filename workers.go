@@ -7,40 +7,131 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
+	"github.com/dustin/go-humanize"
 	"gopkg.in/djherbis/times.v1"
 )
 
 //Copia arquivo mantendo data de modificação e criação inalterado
-func copyFile(src, dst string) error {
+func copyFile(config *Config, src, dst string) error {
 
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
+	var err error = nil
+	for i := 0; i < config.retries; i++ {
 
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
+		sourceInfo, err := os.Stat(src)
+		if err != nil {
+			time.Sleep(config.wait)
+			continue
+		}
+		if sourceInfo.Size() > 5000000000 {
+			fmt.Printf("Copiando arquivo\"%s\", tamanho: %s\n", src, humanize.Bytes(uint64(sourceInfo.Size())))
+		}
+		in, err := os.Open(src)
+		if err != nil {
+			time.Sleep(config.wait)
+			continue
+		}
+		defer in.Close()
 
-	_, err = io.Copy(out, in)
-	if err != nil {
-		return err
+		out, err := os.Create(dst)
+		if err != nil {
+			time.Sleep(config.wait)
+			continue
+		}
+		defer out.Close()
+
+		_, err = io.Copy(out, in)
+		if err != nil {
+			time.Sleep(config.wait)
+			continue
+		}
+		err = out.Close()
+		if err != nil {
+			time.Sleep(config.wait)
+			continue
+		}
+		t, err := times.Stat(src)
+		if err != nil {
+			time.Sleep(config.wait)
+			continue
+		}
+		err = os.Chtimes(dst, t.ChangeTime(), t.ModTime())
+		if err != nil {
+			time.Sleep(config.wait)
+			continue
+		}
+		break
 	}
-	err = out.Close()
-	if err != nil {
-		return err
-	}
-	t, err := times.Stat(src)
-	if err != nil {
-		return err
-	}
-	err = os.Chtimes(dst, t.ChangeTime(), t.ModTime())
+
 	return err
 }
+
+//Copia arquivo mantendo data de modificação e criação inalterado
+// func copyFile(config *Config, src string, dst string) error {
+// 	var err error = nil
+// 	// Tenta copiar arquivo várias vezes
+// 	for i := 0; i < config.retries; i++ {
+// 		sourceInfo, err := os.Stat(src)
+// 		if err != nil {
+// 			time.Sleep(config.wait)
+// 			continue
+// 		}
+// 		if sourceInfo.Size() > 5000000000 {
+// 			fmt.Printf("Copiando arquivo\"%s\", tamanho: %s\n", src, humanize.Bytes(uint64(sourceInfo.Size())))
+// 		}
+
+// 		in, err := os.Open(src)
+// 		if err != nil {
+// 			time.Sleep(config.wait)
+// 			continue
+// 		}
+// 		defer in.Close()
+
+// 		out, err := os.Create(dst)
+// 		if err != nil {
+// 			time.Sleep(config.wait)
+// 			continue
+// 		}
+// 		defer out.Close()
+
+// 		buf := make([]byte, 512)
+// 		for {
+// 			n, err := in.Read(buf)
+// 			if err != nil && err != io.EOF {
+// 				time.Sleep(config.wait)
+// 				continue
+// 			}
+// 			if n == 0 {
+// 				break
+// 			}
+
+// 			if _, err := out.Write(buf[:n]); err != nil {
+// 				time.Sleep(config.wait)
+// 				continue
+// 			}
+// 		}
+
+// 		err = out.Close()
+// 		if err != nil {
+// 			time.Sleep(config.wait)
+// 			continue
+// 		}
+// 		t, err := times.Stat(src)
+// 		if err != nil {
+// 			time.Sleep(config.wait)
+// 			continue
+// 		}
+// 		err = os.Chtimes(dst, t.ChangeTime(), t.ModTime())
+// 		if err != nil {
+// 			time.Sleep(config.wait)
+// 			continue
+// 		}
+// 		break
+// 	}
+// 	return err
+
+// }
 
 //Verifica se existe algum item na pasta de destino que não existe na pasta da fonte e deleta todos
 func purgeItems(config *Config, path string, results chan<- ResultData) {
@@ -59,10 +150,8 @@ func purgeItems(config *Config, path string, results chan<- ResultData) {
 			}
 			err = os.RemoveAll(destAbsolutePath)
 			checkError(err)
-			results <- ResultData{action: "delete", size: 0}
-
+			results <- ResultData{action: "delete", size: 0, n: 0}
 		}
-
 	}
 }
 
@@ -82,7 +171,9 @@ func copyOrReplaceFile(config *Config, relPath string, results chan<- ResultData
 		if config.verbose {
 			fmt.Printf("Novo arquivo \"%s\"\n", relPath)
 		}
-		copyFile(sourcePath, destPath)
+		err := copyFile(config, sourcePath, destPath)
+		checkError(err)
+
 		result.action = "new"
 	} else {
 
@@ -90,11 +181,12 @@ func copyOrReplaceFile(config *Config, relPath string, results chan<- ResultData
 			if config.verbose {
 				fmt.Printf("Arquivo alterado \"%s\"\n", relPath)
 			}
-			copyFile(sourcePath, destPath)
+			copyFile(config, sourcePath, destPath)
 			result.action = "update"
 		}
 	}
 	result.size = sourceInfo.Size()
+	result.n = 1
 
 }
 
@@ -107,7 +199,6 @@ type WorkerConfig struct {
 func fileWorker(jobs <-chan WorkerConfig, results chan<- ResultData, wg *sync.WaitGroup, id int) {
 
 	defer func() {
-		fmt.Printf("Worker %d finalizou\n", id)
 		wg.Done()
 	}()
 	for j := range jobs {
@@ -125,9 +216,7 @@ func update(config *Config, jobs chan WorkerConfig, results chan ResultData) {
 
 	wg.Add(config.NWorkers)
 	for i := 1; i <= config.NWorkers; i++ {
-
 		go fileWorker(jobs, results, &wg, i)
-		fmt.Printf("Iniciando worker %d\n", i)
 	}
 
 	updateRecursively(config, config.source, jobs, results)
@@ -136,14 +225,17 @@ func update(config *Config, jobs chan WorkerConfig, results chan ResultData) {
 
 	}
 	wg.Wait()
-	fmt.Println("DEBUG: Passou wait")
 	results <- ResultData{size: -1}
-
 }
 
 // Percorre todas as pastas e diretórios e faz as atualizações necessárias
 func updateRecursively(config *Config, path string, jobs chan<- WorkerConfig, results chan<- ResultData) {
-	// defer close(jobs)
+
+	if config.purge {
+		relPath, _ := filepath.Rel(config.source, path)
+		destAbsolutePath := filepath.Join(config.dest, relPath)
+		purgeItems(config, destAbsolutePath, results)
+	}
 
 	items, _ := ioutil.ReadDir(path)
 	for _, item := range items {
@@ -162,7 +254,10 @@ func updateRecursively(config *Config, path string, jobs chan<- WorkerConfig, re
 				err := os.MkdirAll(destAbsolutePath, os.ModePerm)
 				checkError(err)
 			}
-			purgeItems(config, destAbsolutePath, results)
+			if config.purge {
+				purgeItems(config, destAbsolutePath, results)
+			}
+
 			updateRecursively(config, sourceAbsolutePath, jobs, results)
 
 		} else {
@@ -178,6 +273,7 @@ func updateRecursively(config *Config, path string, jobs chan<- WorkerConfig, re
 
 type ResultData struct {
 	size   int64
+	n      int64
 	action string
 }
 
@@ -186,10 +282,9 @@ func progressWork(config *Config, progress *Progress, results <-chan ResultData,
 	for resultData := range results {
 
 		if resultData.size == -1 {
-			fmt.Println("DEBUG: recebeu -1")
 			break
 		}
-		progress.currentNumber++
+		progress.currentNumber += resultData.n
 		progress.currentSize += resultData.size
 		switch resultData.action {
 		case "new":

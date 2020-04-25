@@ -32,5 +32,5 @@ func (progress *Progress) calculateProgress() {
 	progress.speed = float64(progress.currentSize) / float64(progress.elapsed.Nanoseconds()) //bytes por nanosegundo
 	progress.remainingTime = int64(float64(progress.totalSize-progress.currentSize) / progress.speed)
 	remainingTimeStr := durafmt.Parse(time.Duration(progress.remainingTime)).String()
-	fmt.Printf("N Items analizados: %0.2f%%		 Bytes: %0.2f%%		 Estimado: %s\n", progress.progressNumber, progress.progressSize, remainingTimeStr)
+	fmt.Printf("Items analizados: %0.2f%%		 Bytes: %0.2f%%		 Estimado: %s\n", progress.progressNumber, progress.progressSize, remainingTimeStr)
 }
