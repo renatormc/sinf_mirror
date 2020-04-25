@@ -14,19 +14,30 @@ import (
 )
 
 //Copia arquivo mantendo data de modificação e criação inalterado
-func copyFile(config *Config, src, dst string) error {
+func copyFile(config *Config, src string, dst string, results chan<- ResultData, resultData *ResultData) error {
 
 	var err error = nil
+	var chargeBack int64
+	// var pending int64
+	// resultData := ResultData{size:}
+
+OUTER:
 	for i := 0; i < config.retries; i++ {
+
+		//Em caso de erro estornar o que já foi informado para o gerenciador de progresso
+		if chargeBack != 0 {
+			results <- ResultData{action: "correction", size: chargeBack, n: 0}
+		}
+
+		chargeBack = 0
+		resultData.size = 0
 
 		sourceInfo, err := os.Stat(src)
 		if err != nil {
 			time.Sleep(config.wait)
 			continue
 		}
-		if sourceInfo.Size() > 5000000000 {
-			fmt.Printf("Copiando arquivo\"%s\", tamanho: %s\n", src, humanize.Bytes(uint64(sourceInfo.Size())))
-		}
+
 		in, err := os.Open(src)
 		if err != nil {
 			time.Sleep(config.wait)
@@ -41,11 +52,37 @@ func copyFile(config *Config, src, dst string) error {
 		}
 		defer out.Close()
 
-		_, err = io.Copy(out, in)
-		if err != nil {
-			time.Sleep(config.wait)
-			continue
+		//Caso o arquivo seja grande copia por partes e atualza progresso por partes
+		if sourceInfo.Size() > 1000000000 {
+
+			fmt.Printf("Copiando arquivo grande \"%s\", tamanho: %s\n", src, humanize.Bytes(uint64(sourceInfo.Size())))
+			buf := make([]byte, config.bufferSize)
+			for {
+				n, err := in.Read(buf)
+				if err != nil && err != io.EOF {
+					time.Sleep(config.wait)
+					continue
+				}
+				if n == 0 {
+					break
+				}
+
+				if _, err := out.Write(buf[:n]); err != nil {
+					time.Sleep(config.wait)
+					continue OUTER
+				}
+				results <- ResultData{action: "partial_copy", n: 0, size: int64(n)}
+				chargeBack -= int64(n)
+			}
+		} else {
+			_, err = io.Copy(out, in)
+			if err != nil {
+				time.Sleep(config.wait)
+				continue
+			}
+			resultData.size = sourceInfo.Size()
 		}
+
 		err = out.Close()
 		if err != nil {
 			time.Sleep(config.wait)
@@ -61,6 +98,10 @@ func copyFile(config *Config, src, dst string) error {
 			time.Sleep(config.wait)
 			continue
 		}
+
+		//Informa gerenciador de progresso que um arquivo terminou sua copia
+		resultData.n = 1
+		results <- *resultData
 		break
 	}
 
@@ -158,35 +199,32 @@ func purgeItems(config *Config, path string, results chan<- ResultData) {
 //Compara arquivo na fonte com destino se for diferente ou não existir copia o novo
 func copyOrReplaceFile(config *Config, relPath string, results chan<- ResultData) {
 
-	var result ResultData
-	defer func() {
-		results <- result
-	}()
+	var resultData ResultData
 	sourcePath := filepath.Join(config.source, relPath)
 	destPath := filepath.Join(config.dest, relPath)
 	sourceInfo, err := os.Stat(sourcePath)
 	checkError(err)
 	desttInfo, err := os.Stat(destPath)
-	if os.IsNotExist(err) {
+	if os.IsNotExist(err) { // Arquivo novo
 		if config.verbose {
 			fmt.Printf("Novo arquivo \"%s\"\n", relPath)
 		}
-		err := copyFile(config, sourcePath, destPath)
+		err := copyFile(config, sourcePath, destPath, results, &resultData)
 		checkError(err)
 
-		result.action = "new"
-	} else {
-
-		if (sourceInfo.Size() != desttInfo.Size()) || (sourceInfo.ModTime() != desttInfo.ModTime()) {
-			if config.verbose {
-				fmt.Printf("Arquivo alterado \"%s\"\n", relPath)
-			}
-			copyFile(config, sourcePath, destPath)
-			result.action = "update"
+		resultData.action = "new"
+	} else if (sourceInfo.Size() != desttInfo.Size()) || (sourceInfo.ModTime() != desttInfo.ModTime()) { //Arquivo modificado
+		if config.verbose {
+			fmt.Printf("Arquivo alterado \"%s\"\n", relPath)
 		}
+		copyFile(config, sourcePath, destPath, results, &resultData)
+		resultData.action = "update"
+	} else { // Arquivo igual
+		resultData.action = "equal"
+		resultData.n = 1
+		resultData.size = sourceInfo.Size()
+		results <- resultData
 	}
-	result.size = sourceInfo.Size()
-	result.n = 1
 
 }
 
@@ -212,6 +250,14 @@ func fileWorker(jobs <-chan WorkerConfig, results chan<- ResultData, wg *sync.Wa
 }
 
 func update(config *Config, jobs chan WorkerConfig, results chan ResultData) {
+
+	//Cria a pasta de destino caso ela não exista
+	_, err := os.Stat(config.dest)
+	if os.IsNotExist(err) {
+		err := os.MkdirAll(config.dest, os.ModePerm)
+		checkError(err)
+	}
+
 	var wg sync.WaitGroup
 
 	wg.Add(config.NWorkers)
@@ -225,7 +271,7 @@ func update(config *Config, jobs chan WorkerConfig, results chan ResultData) {
 
 	}
 	wg.Wait()
-	results <- ResultData{size: -1}
+	results <- ResultData{action: "finish"}
 }
 
 // Percorre todas as pastas e diretórios e faz as atualizações necessárias
@@ -281,7 +327,7 @@ func progressWork(config *Config, progress *Progress, results <-chan ResultData,
 
 	for resultData := range results {
 
-		if resultData.size == -1 {
+		if resultData.action == "finish" {
 			break
 		}
 		progress.currentNumber += resultData.n
@@ -293,6 +339,8 @@ func progressWork(config *Config, progress *Progress, results <-chan ResultData,
 			progress.updateFiles++
 		case "delete":
 			progress.deletedItems++
+		case "equal":
+			progress.equalFiles++
 		}
 
 		progress.calculateProgress()
