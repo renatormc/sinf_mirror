@@ -17,6 +17,8 @@ func main() {
 	dest := parser.String("d", "destination", &argparse.Options{Required: true, Help: "Folder to mirror to"})
 	nWorkers := parser.Int("w", "workers", &argparse.Options{Default: 8, Help: "Number of workers"})
 	threshold := parser.Int("t", "threshold", &argparse.Options{Default: 8, Help: "Size in megabytes above which there will be no concurrency"})
+	thresholdChunk := parser.Int("c", "threshold-chunk", &argparse.Options{Default: 8388600, Help: "Size in megabytes above which file will be copied in chunks"})
+	// thresholdChunk := parser.Int("c", "threshold-chunk", &argparse.Options{Default: 8388600‬‬})
 	bufferSize := parser.Int("b", "buffer", &argparse.Options{Default: 1, Help: "Buffer size in megabytes"})
 	verbose := parser.Flag("v", "verbose", &argparse.Options{Default: false, Help: "Verbose"})
 	purge := parser.Flag("p", "purge", &argparse.Options{Default: false, Help: "Purge"})
@@ -35,6 +37,7 @@ func main() {
 	synchronizer.verbose = *verbose
 	synchronizer.NWorkers = *nWorkers
 	synchronizer.bufferSize = int64(*bufferSize) * 1048576
+	synchronizer.thresholdChunk = int64(*thresholdChunk) * 1048576
 	synchronizer.purge = *purge
 	synchronizer.retries = *retries
 	synchronizer.threshold = int64(*threshold) * 1048576

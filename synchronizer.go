@@ -19,6 +19,7 @@ type Synchronizer struct {
 	verbose         bool            // Imprimir mensagens extras
 	NWorkers        int             // Número de workers
 	threshold       int64           // Tamanho em megabytes a partir do qual será copiado sem concorrência
+	thresholdChunk  int64           // Tamanho acima do qual o arquivo será copiado em partes
 	bufferSize      int64           // Tamanho do buffer utilizado para copiar arquivos grandes
 	purge           bool            // Deletar o que existir no destino e não na fonte
 	retries         int             // Número de tentativas de copiar arquivo caso ocorra erros
@@ -163,7 +164,7 @@ OUTER:
 		}
 		defer out.Close()
 
-		if sourceInfo.Size() > 1000000000 {
+		if sourceInfo.Size() > synchronizer.thresholdChunk {
 			buf := make([]byte, synchronizer.bufferSize)
 			for {
 				n, err := in.Read(buf)
