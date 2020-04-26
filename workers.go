@@ -27,11 +27,11 @@ OUTER:
 		checkError(err)
 
 		// Caso o arquivo seja grande anotar para copiar depois
-		if !config.copyLargeFiles && sourceInfo.Size() > config.threshold {
-			fmt.Printf("DEBUG LARGE FILE: %s\n", src)
-			results <- ResultData{action: "large_file", path: src}
-			return err
-		}
+		// if !config.copyLargeFiles && sourceInfo.Size() > config.threshold {
+		// 	fmt.Printf("DEBUG LARGE FILE: %s\n", src)
+		// 	results <- ResultData{action: "large_file", path: src}
+		// 	return err
+		// }
 
 		//Em caso de erro estornar o que já foi informado para o gerenciador de progresso
 		if chargeBack != 0 {
@@ -168,12 +168,13 @@ func copyOrReplaceFile(config *Config, relPath string, results chan<- ResultData
 }
 
 type WorkerConfig struct {
-	config  *Config
-	relPath string
+	config      *Config
+	relPath     string
+	acknowledge bool // Flag para dizer ao work que ele deve informar que terminou a tarefa
 }
 
 //Compara arquivo na fonte com destino se for diferente ou não existir copia o novo
-func fileWorker(jobs <-chan WorkerConfig, results chan<- ResultData, wg *sync.WaitGroup, id int) {
+func fileWorker(jobs <-chan WorkerConfig, results chan<- ResultData, wg *sync.WaitGroup, id int, acknowledgeDone chan bool) {
 
 	defer func() {
 		wg.Done()
@@ -181,6 +182,9 @@ func fileWorker(jobs <-chan WorkerConfig, results chan<- ResultData, wg *sync.Wa
 	for j := range jobs {
 		if j.relPath != "wfinish" {
 			copyOrReplaceFile(j.config, j.relPath, results)
+			if j.acknowledge {
+				acknowledgeDone <- true
+			}
 		} else {
 			return
 		}
@@ -188,7 +192,7 @@ func fileWorker(jobs <-chan WorkerConfig, results chan<- ResultData, wg *sync.Wa
 
 }
 
-func update(config *Config, jobs chan WorkerConfig, results chan ResultData, largeFiles *[]string) {
+func update(config *Config, jobs chan WorkerConfig, results chan ResultData) {
 
 	//Cria a pasta de destino caso ela não exista
 	_, err := os.Stat(config.dest)
@@ -198,14 +202,15 @@ func update(config *Config, jobs chan WorkerConfig, results chan ResultData, lar
 	}
 
 	var wg sync.WaitGroup
+	acknowledgeDone := make(chan bool)
 
 	// Inicia todos os workers
 	wg.Add(config.NWorkers)
 	for i := 1; i <= config.NWorkers; i++ {
-		go fileWorker(jobs, results, &wg, i)
+		go fileWorker(jobs, results, &wg, i, acknowledgeDone)
 	}
 
-	updateRecursively(config, config.source, jobs, results)
+	updateRecursively(config, config.source, jobs, results, acknowledgeDone)
 
 	// Coloca mensagens de finalização para que todos os workers finalizem
 	for i := 0; i < config.NWorkers; i++ {
@@ -214,21 +219,21 @@ func update(config *Config, jobs chan WorkerConfig, results chan ResultData, lar
 	}
 	wg.Wait() // Aguarda todos os workers terminarem
 
-	if config.verbose {
-		fmt.Println("Iniciando copia de arquivos grandes.")
-	}
-	config.copyLargeFiles = true
-	for _, relPath := range *largeFiles {
+	// if config.verbose {
+	// 	fmt.Println("Iniciando copia de arquivos grandes.")
+	// }
+	// config.copyLargeFiles = true
+	// for _, relPath := range *largeFiles {
 
-		copyOrReplaceFile(config, relPath, results)
-	}
+	// 	copyOrReplaceFile(config, relPath, results)
+	// }
 
 	results <- ResultData{action: "finish"}
 
 }
 
 // Percorre todas as pastas e diretórios e faz as atualizações necessárias
-func updateRecursively(config *Config, path string, jobs chan<- WorkerConfig, results chan<- ResultData) {
+func updateRecursively(config *Config, path string, jobs chan<- WorkerConfig, results chan<- ResultData, acknowledgeDone <-chan bool) {
 
 	if config.purge {
 		relPath, _ := filepath.Rel(config.source, path)
@@ -257,14 +262,23 @@ func updateRecursively(config *Config, path string, jobs chan<- WorkerConfig, re
 				purgeItems(config, destAbsolutePath, results)
 			}
 
-			updateRecursively(config, sourceAbsolutePath, jobs, results)
+			updateRecursively(config, sourceAbsolutePath, jobs, results, acknowledgeDone)
 
 		} else {
 			var workerConfig WorkerConfig
 			workerConfig.config = config
 			workerConfig.relPath = relPath
+			sourceInfo, err := os.Stat(sourceAbsolutePath)
+			checkError(err)
+			workerConfig.acknowledge = sourceInfo.Size() > config.threshold
+
 			jobs <- workerConfig
-			// copyOrReplaceFile(config, relPath)
+
+			// Aguardar copia de arquivo grande
+			if workerConfig.acknowledge {
+				fmt.Println("DEBUG: Aguardando terminar copia de arquivo grande")
+				<-acknowledgeDone
+			}
 		}
 	}
 
@@ -278,7 +292,7 @@ type ResultData struct {
 }
 
 // Worker responsável por calcular o progresso e printar no console.
-func progressWork(config *Config, progress *Progress, results <-chan ResultData, finished chan<- bool, largeFiles *[]string) {
+func progressWork(config *Config, progress *Progress, results <-chan ResultData, finished chan<- bool) {
 
 	for resultData := range results {
 
@@ -305,9 +319,6 @@ func progressWork(config *Config, progress *Progress, results <-chan ResultData,
 		case "correction":
 			progress.currentNumber += resultData.n
 			progress.currentSize += resultData.size
-		case "large_file":
-			relPath, _ := filepath.Rel(config.source, resultData.path)
-			*largeFiles = append(*largeFiles, relPath)
 		}
 
 		progress.calculateProgress()

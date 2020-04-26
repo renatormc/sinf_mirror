@@ -11,16 +11,15 @@ import (
 )
 
 type Config struct {
-	source         string        //pasta fonte
-	dest           string        // pasta destino
-	verbose        bool          // Imprimir mensagens extras
-	NWorkers       int           // Número de workers
-	threshold      int64         // Tamanho em megabytes a partir do qual será copiado sem concorrência
-	bufferSize     int64         // Tamanho do buffer utilizado para copiar arquivos grandes
-	purge          bool          // Deletar o que existir no destino e não na fonte
-	retries        int           // Número de tentativas de copiar arquivo caso ocorra erros
-	wait           time.Duration // Tempo para aguardar antes de tentar de novo em segundos
-	copyLargeFiles bool
+	source     string        //pasta fonte
+	dest       string        // pasta destino
+	verbose    bool          // Imprimir mensagens extras
+	NWorkers   int           // Número de workers
+	threshold  int64         // Tamanho em megabytes a partir do qual será copiado sem concorrência
+	bufferSize int64         // Tamanho do buffer utilizado para copiar arquivos grandes
+	purge      bool          // Deletar o que existir no destino e não na fonte
+	retries    int           // Número de tentativas de copiar arquivo caso ocorra erros
+	wait       time.Duration // Tempo para aguardar antes de tentar de novo em segundos
 }
 
 func main() {
@@ -51,7 +50,6 @@ func main() {
 	config.retries = *retries
 	config.threshold = int64(*threshold) * 1048576
 	config.wait = time.Duration((*waitTime) * 1000000000)
-	config.copyLargeFiles = false
 	fmt.Println("Contando arquivos...")
 	var progress Progress
 	progress.totalSize = 0
@@ -60,7 +58,6 @@ func main() {
 	counter.countFiles()
 	progress.totalNumber = counter.totalNumber
 	progress.totalSize = counter.totalSize
-	largeFiles := make([]string, 0, 100) // Lista de arquivos grandes que deverão ser copiados sem concorrência
 	fmt.Printf("Número de arquivos encontrados: %d\n", progress.totalNumber)
 	fmt.Printf("Total bytes: %s\n", humanize.Bytes(uint64(progress.totalSize)))
 	progress.newFiles = 0
@@ -70,10 +67,10 @@ func main() {
 	jobs := make(chan WorkerConfig)
 	results := make(chan ResultData)
 	finished := make(chan bool)
-	go progressWork(&config, &progress, results, finished, &largeFiles)
+	go progressWork(&config, &progress, results, finished)
 	fmt.Println("Sincronizando...")
 	progress.startTime = time.Now()
-	go update(&config, jobs, results, &largeFiles)
+	go update(&config, jobs, results)
 
 	<-finished
 
