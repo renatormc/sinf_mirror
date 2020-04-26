@@ -4,20 +4,20 @@ import (
 	"sync"
 )
 
-// Worker é
+// Worker mantém as configurações do worker
 type Worker struct {
-	synchronizer    *Synchronizer
-	results         chan<- ResultData
-	jobs            <-chan JobConfig
-	acknowledgeDone chan<- bool
-	id              int
-	wg              *sync.WaitGroup
+	synchronizer    *Synchronizer     // Ponteiro para o sincronizador
+	results         chan<- ResultData // Canal utilizado para passar o resultado da tarefa par ao gerenciador de progresso
+	jobs            <-chan JobConfig  // Canal por onde o worker receberá as tarefas
+	acknowledgeDone chan<- bool       // Canal utilizado para informar o sincronizador que foi terminada a tarefa de copia de um arquivo grande
+	id              int               // Número inteiro que indentifica o woker cada um tem o seu
+	wg              *sync.WaitGroup   // Ponteiro para o objeto que é reponsável por garantir que todos os workers terminaram suas tarefas
 }
 
 // JobConfig armazena dados sobre o trabalho a ser executado
 type JobConfig struct {
-	relPath     string
-	acknowledge bool // Flag para dizer ao work que ele deve informar que terminou a tarefa
+	relPath     string // Caminho relativo do arquivo
+	acknowledge bool   // Flag para dizer ao work que ele deve informar que terminou a tarefa
 }
 
 func (worker *Worker) init() {
@@ -27,7 +27,10 @@ func (worker *Worker) init() {
 	worker.wg = &worker.synchronizer.wg
 }
 
-//Compara arquivo na fonte com destino se for diferente ou não existir copia o novo
+// Função de execução do worker vai pegando as tarefas que forem aparecendo no canal jobs e executando.
+// Caso a flag acknowledge estiver setada ele informa através do canal acknowledgeDone o sincronizador que terminou a tarefa.
+// O Sincronizador que escolhe quando o woker deve informar que terminou e quando não precisa. Normalmente será preciso somente quando o arquivo for grande.
+// Nesse caso o sincronizador não irá atribuir tarefa aos outros workers enquanto não for informado que a cópia do arquivo grande foi finalizada
 func (worker *Worker) run() {
 
 	defer func() {

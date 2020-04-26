@@ -14,20 +14,20 @@ import (
 
 // Synchronizer matém as configuraçõse do programa
 type Synchronizer struct {
-	source          string        //pasta fonte
-	dest            string        // pasta destino
-	verbose         bool          // Imprimir mensagens extras
-	NWorkers        int           // Número de workers
-	threshold       int64         // Tamanho em megabytes a partir do qual será copiado sem concorrência
-	bufferSize      int64         // Tamanho do buffer utilizado para copiar arquivos grandes
-	purge           bool          // Deletar o que existir no destino e não na fonte
-	retries         int           // Número de tentativas de copiar arquivo caso ocorra erros
-	wait            time.Duration // Tempo para aguardar antes de tentar de novo em segundos
-	results         chan ResultData
-	jobs            chan JobConfig
-	acknowledgeDone chan bool
-	finished        chan bool
-	wg              sync.WaitGroup
+	source          string          //pasta fonte
+	dest            string          // pasta destino
+	verbose         bool            // Imprimir mensagens extras
+	NWorkers        int             // Número de workers
+	threshold       int64           // Tamanho em megabytes a partir do qual será copiado sem concorrência
+	bufferSize      int64           // Tamanho do buffer utilizado para copiar arquivos grandes
+	purge           bool            // Deletar o que existir no destino e não na fonte
+	retries         int             // Número de tentativas de copiar arquivo caso ocorra erros
+	wait            time.Duration   // Tempo para aguardar antes de tentar de novo em segundos
+	results         chan ResultData // Canal cuja função é ser utilizado pelos workers para passar os resultados das tarefas ao gerenciador de progresso
+	jobs            chan JobConfig  // Canal cuja função é ser utilizado pelo sincronizador para atribuir tarefas aos workers
+	acknowledgeDone chan bool       // Canal cuja função é ser utilizado pelos workers para informar o sincronizador que uma cópia de arquivo grande foi finalizada
+	finished        chan bool       // Canal cuja função é ser utilizado pelo gerenciador de progresso para informar o sincronizador que o trabalho de sincronização terminou
+	wg              sync.WaitGroup  // Este objeto é utlizado pelo sincronizador para garantir que não tem nem um workers trabalhando ainda
 }
 
 func (synchronizer *Synchronizer) init() {
@@ -36,6 +36,9 @@ func (synchronizer *Synchronizer) init() {
 	synchronizer.finished = make(chan bool)
 }
 
+// Função de execução do sincronizador. Aqui as tarefas vão sendo colocadas no canal jobs uma a uma.
+// A medida que cada woker vai terminando sua tarefa ele vai pegando novas tarefas no canal jobs.
+// O sincronzador coloca uma tarefa e espera até que algum worker a pegue pra fazer para só então colocar a próxima no canal
 func (synchronizer *Synchronizer) run() {
 
 	//Cria a pasta de destino caso ela não exista
@@ -111,7 +114,6 @@ func (synchronizer *Synchronizer) updateRecursively(path string) {
 
 			// Aguardar copia de arquivo grande
 			if jobConfig.acknowledge {
-				fmt.Println("DEBUG: Aguardando terminar copia de arquivo grande")
 				<-synchronizer.acknowledgeDone
 			}
 		}
@@ -119,7 +121,13 @@ func (synchronizer *Synchronizer) updateRecursively(path string) {
 
 }
 
-//Copia arquivo mantendo data de modificação e criação inalteradas
+// Copia arquivo mantendo data de modificação e criação inalteradas
+// Utiliza dois métodos, caso o arquivo seja pequeno, utiliza a função io.Copy e o progresso só será atualizado no final da cópia.
+// No caso de arquivos grandes a cópia será feita bufferizada e por partes informando o gerenciador de progresso a cada pedaço do arquivo copiado.
+// A finalidade disso é para que não fique muito tempo sem prints de progresso no console e o usuário fique pensando que o processo travou
+// Como o gerenciador de progresso vai sendo informado por partes pode ser que a copia não chegue até o final sem erros.
+// Caso houver erro é necessário estornar a quantidade de bytes contabilizadas como já copiados.
+// Por isso existe a variável chargeBack que armazena a quantidade de bytes que devem ser estornados em caso de erro
 func (synchronizer *Synchronizer) copyFile(src string, dst string, resultData *ResultData) error {
 
 	var err error = nil
@@ -155,10 +163,7 @@ OUTER:
 		}
 		defer out.Close()
 
-		//Caso o arquivo seja grande copia por partes e atualza progresso por partes
 		if sourceInfo.Size() > 1000000000 {
-
-			// fmt.Printf("Copiando arquivo grande \"%s\", tamanho: %s\n", src, humanize.Bytes(uint64(sourceInfo.Size())))
 			buf := make([]byte, synchronizer.bufferSize)
 			for {
 				n, err := in.Read(buf)
@@ -242,23 +247,24 @@ func (synchronizer *Synchronizer) copyOrReplaceFile(relPath string) {
 	sourceInfo, err := os.Stat(sourcePath)
 	checkError(err)
 	desttInfo, err := os.Stat(destPath)
-	if os.IsNotExist(err) { // Arquivo novo
+	// Arquivo novo
+	if os.IsNotExist(err) {
 		if synchronizer.verbose {
 			fmt.Printf("Novo arquivo \"%s\"\n", relPath)
 		}
 		resultData.action = "new"
 		err := synchronizer.copyFile(sourcePath, destPath, &resultData)
 		checkError(err)
-
-	} else if (sourceInfo.Size() != desttInfo.Size()) || (sourceInfo.ModTime() != desttInfo.ModTime()) { //Arquivo modificado
+		//Arquivo modificado
+	} else if (sourceInfo.Size() != desttInfo.Size()) || (sourceInfo.ModTime() != desttInfo.ModTime()) {
 		if synchronizer.verbose {
 			fmt.Printf("Arquivo alterado \"%s\"\n", relPath)
 		}
 		resultData.action = "update"
 		err := synchronizer.copyFile(sourcePath, destPath, &resultData)
 		checkError(err)
-
-	} else { // Arquivo igual
+		// Arquivo igual
+	} else {
 		resultData.action = "equal"
 		resultData.n = 1
 		resultData.size = sourceInfo.Size()
