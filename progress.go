@@ -2,13 +2,15 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
+	"path/filepath"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/hako/durafmt"
 )
 
-// Estrutura que armazena informações sobre o progress
+// Progress Estrutura que armazena informações sobre o progress
 type Progress struct {
 	totalSize     int64         // Quantidade total de bytes
 	totalNumber   int64         // Quantidade total de arquivos
@@ -23,6 +25,26 @@ type Progress struct {
 	updateFiles   int64         // Quantidae de arquivos modificados
 	deletedItems  int64         // Quantidade de itens deletados, pastas e arquivos
 	equalFiles    int64         // Quantidate de arquivos iguais
+	results       <-chan ResultData
+	finished      chan bool
+	synchronizer  *Synchronizer
+}
+
+// ResultData serve para passar dados dos workers para o gerenciador de progresso
+type ResultData struct {
+	size   int64
+	n      int64
+	action string
+	path   string
+}
+
+func (progress *Progress) init() {
+	progress.newFiles = 0
+	progress.updateFiles = 0
+	progress.deletedItems = 0
+	progress.totalSize = 0
+	progress.results = progress.synchronizer.results
+	progress.finished = progress.synchronizer.finished
 }
 
 // Calcula o progresso
@@ -35,4 +57,60 @@ func (progress *Progress) calculateProgress() {
 	speed := progress.speed * 1000000000 * 60 //bytes por minuto
 	fmt.Printf("%s/min    %d de %d    %0.2f%%    Estimado: %s\n", humanize.Bytes(uint64(speed)), progress.currentNumber, progress.totalNumber, progress.progressSize, remainingTimeStr)
 
+}
+
+func (progress *Progress) countFiles() {
+	progress.totalNumber = 0
+	progress.totalSize = 0
+	progress.countFilesRecursively(progress.synchronizer.source)
+}
+
+func (progress *Progress) countFilesRecursively(path string) {
+
+	items, _ := ioutil.ReadDir(path)
+	for _, item := range items {
+		if item.IsDir() {
+			progress.countFilesRecursively(filepath.Join(path, item.Name()))
+		} else {
+			progress.totalNumber++
+			progress.totalSize += item.Size()
+		}
+	}
+}
+
+// Worker responsável por calcular o progresso e printar no console.
+func (progress *Progress) run() {
+	progress.startTime = time.Now()
+
+	for resultData := range progress.results {
+
+		if resultData.action == "finish" {
+			break
+		}
+		switch resultData.action {
+		case "new":
+			progress.currentNumber += resultData.n
+			progress.currentSize += resultData.size
+			progress.newFiles++
+		case "update":
+			progress.currentNumber += resultData.n
+			progress.currentSize += resultData.size
+			progress.updateFiles++
+		case "delete":
+			progress.currentNumber += resultData.n
+			progress.currentSize += resultData.size
+			progress.deletedItems++
+		case "equal":
+			progress.currentNumber += resultData.n
+			progress.currentSize += resultData.size
+			progress.equalFiles++
+		case "correction":
+			progress.currentNumber += resultData.n
+			progress.currentSize += resultData.size
+		}
+
+		progress.calculateProgress()
+	}
+
+	progress.finished <- true
 }
