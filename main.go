@@ -48,7 +48,7 @@ func main() {
 	config.bufferSize = int64(*bufferSize) * 1048576
 	config.purge = *purge
 	config.retries = *retries
-	config.threshold = *threshold
+	config.threshold = int64(*threshold) * 1048576
 	config.wait = time.Duration((*waitTime) * 1000000000)
 	fmt.Println("Contando arquivos...")
 	var progress Progress
