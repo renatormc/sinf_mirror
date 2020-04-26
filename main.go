@@ -11,15 +11,16 @@ import (
 )
 
 type Config struct {
-	source     string        //pasta fonte
-	dest       string        // pasta destino
-	verbose    bool          // Imprimir mensagens extras
-	NWorkers   int           // Número de workers
-	threshold  int64         // Tamanho em megabytes a partir do qual será copiado sem concorrência
-	bufferSize int64         // Tamanho do buffer utilizado para copiar arquivos grandes
-	purge      bool          // Deletar o que existir no destino e não na fonte
-	retries    int           // Número de tentativas de copiar arquivo caso ocorra erros
-	wait       time.Duration // Tempo para aguardar antes de tentar de novo em segundos
+	source         string        //pasta fonte
+	dest           string        // pasta destino
+	verbose        bool          // Imprimir mensagens extras
+	NWorkers       int           // Número de workers
+	threshold      int64         // Tamanho em megabytes a partir do qual será copiado sem concorrência
+	bufferSize     int64         // Tamanho do buffer utilizado para copiar arquivos grandes
+	purge          bool          // Deletar o que existir no destino e não na fonte
+	retries        int           // Número de tentativas de copiar arquivo caso ocorra erros
+	wait           time.Duration // Tempo para aguardar antes de tentar de novo em segundos
+	copyLargeFiles bool
 }
 
 func main() {
@@ -28,12 +29,12 @@ func main() {
 	source := parser.String("s", "source", &argparse.Options{Required: true, Help: "Folder to be mirrored"})
 	dest := parser.String("d", "destination", &argparse.Options{Required: true, Help: "Folder to mirror to"})
 	nWorkers := parser.Int("w", "workers", &argparse.Options{Default: 8, Help: "Number of workers"})
-	threshold := parser.Int("t", "threshold", &argparse.Options{Default: 8, Help: "Size above which there will be no concurrency"})
+	threshold := parser.Int("t", "threshold", &argparse.Options{Default: 8, Help: "Size in megabytes above which there will be no concurrency"})
 	bufferSize := parser.Int("b", "buffer", &argparse.Options{Default: 1, Help: "Buffer size in megabytes"})
 	verbose := parser.Flag("v", "verbose", &argparse.Options{Default: false, Help: "Verbose"})
 	purge := parser.Flag("p", "purge", &argparse.Options{Default: false, Help: "Purge"})
 	retries := parser.Int("r", "retries", &argparse.Options{Default: 10, Help: "Specifies the number of retries on failed copies"})
-	waitTime := parser.Int("t", "wait", &argparse.Options{Default: 30, Help: "Specifies the wait time between retries, in seconds."})
+	waitTime := parser.Int("i", "wait", &argparse.Options{Default: 1, Help: "Specifies the wait time between retries, in seconds."})
 	err := parser.Parse(os.Args)
 	if err != nil {
 		fmt.Print(parser.Usage(err))
@@ -50,6 +51,7 @@ func main() {
 	config.retries = *retries
 	config.threshold = int64(*threshold) * 1048576
 	config.wait = time.Duration((*waitTime) * 1000000000)
+	config.copyLargeFiles = false
 	fmt.Println("Contando arquivos...")
 	var progress Progress
 	progress.totalSize = 0
@@ -58,6 +60,7 @@ func main() {
 	counter.countFiles()
 	progress.totalNumber = counter.totalNumber
 	progress.totalSize = counter.totalSize
+	largeFiles := make([]string, 0, 100) // Lista de arquivos grandes que deverão ser copiados sem concorrência
 	fmt.Printf("Número de arquivos encontrados: %d\n", progress.totalNumber)
 	fmt.Printf("Total bytes: %s\n", humanize.Bytes(uint64(progress.totalSize)))
 	progress.newFiles = 0
@@ -67,10 +70,10 @@ func main() {
 	jobs := make(chan WorkerConfig)
 	results := make(chan ResultData)
 	finished := make(chan bool)
-	go progressWork(&config, &progress, results, finished)
+	go progressWork(&config, &progress, results, finished, &largeFiles)
 	fmt.Println("Sincronizando...")
 	progress.startTime = time.Now()
-	go update(&config, jobs, results)
+	go update(&config, jobs, results, &largeFiles)
 
 	<-finished
 

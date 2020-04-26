@@ -9,20 +9,29 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dustin/go-humanize"
 	"gopkg.in/djherbis/times.v1"
 )
 
-//Copia arquivo mantendo data de modificação e criação inalterado
+//Copia arquivo mantendo data de modificação e criação inalteradas
 func copyFile(config *Config, src string, dst string, results chan<- ResultData, resultData *ResultData) error {
 
 	var err error = nil
 	var chargeBack int64
-	// var pending int64
-	// resultData := ResultData{size:}
 
 OUTER:
 	for i := 0; i < config.retries; i++ {
+		sourceInfo, err := os.Stat(src)
+		if os.IsNotExist(err) {
+			return err
+		}
+		checkError(err)
+
+		// Caso o arquivo seja grande anotar para copiar depois
+		if !config.copyLargeFiles && sourceInfo.Size() > config.threshold {
+			fmt.Printf("DEBUG LARGE FILE: %s\n", src)
+			results <- ResultData{action: "large_file", path: src}
+			return err
+		}
 
 		//Em caso de erro estornar o que já foi informado para o gerenciador de progresso
 		if chargeBack != 0 {
@@ -31,12 +40,6 @@ OUTER:
 
 		chargeBack = 0
 		resultData.size = 0
-
-		sourceInfo, err := os.Stat(src)
-		if err != nil {
-			time.Sleep(config.wait)
-			continue
-		}
 
 		in, err := os.Open(src)
 		if err != nil {
@@ -55,7 +58,7 @@ OUTER:
 		//Caso o arquivo seja grande copia por partes e atualza progresso por partes
 		if sourceInfo.Size() > 1000000000 {
 
-			fmt.Printf("Copiando arquivo grande \"%s\", tamanho: %s\n", src, humanize.Bytes(uint64(sourceInfo.Size())))
+			// fmt.Printf("Copiando arquivo grande \"%s\", tamanho: %s\n", src, humanize.Bytes(uint64(sourceInfo.Size())))
 			buf := make([]byte, config.bufferSize)
 			for {
 				n, err := in.Read(buf)
@@ -108,72 +111,6 @@ OUTER:
 	return err
 }
 
-//Copia arquivo mantendo data de modificação e criação inalterado
-// func copyFile(config *Config, src string, dst string) error {
-// 	var err error = nil
-// 	// Tenta copiar arquivo várias vezes
-// 	for i := 0; i < config.retries; i++ {
-// 		sourceInfo, err := os.Stat(src)
-// 		if err != nil {
-// 			time.Sleep(config.wait)
-// 			continue
-// 		}
-// 		if sourceInfo.Size() > 5000000000 {
-// 			fmt.Printf("Copiando arquivo\"%s\", tamanho: %s\n", src, humanize.Bytes(uint64(sourceInfo.Size())))
-// 		}
-
-// 		in, err := os.Open(src)
-// 		if err != nil {
-// 			time.Sleep(config.wait)
-// 			continue
-// 		}
-// 		defer in.Close()
-
-// 		out, err := os.Create(dst)
-// 		if err != nil {
-// 			time.Sleep(config.wait)
-// 			continue
-// 		}
-// 		defer out.Close()
-
-// 		buf := make([]byte, 512)
-// 		for {
-// 			n, err := in.Read(buf)
-// 			if err != nil && err != io.EOF {
-// 				time.Sleep(config.wait)
-// 				continue
-// 			}
-// 			if n == 0 {
-// 				break
-// 			}
-
-// 			if _, err := out.Write(buf[:n]); err != nil {
-// 				time.Sleep(config.wait)
-// 				continue
-// 			}
-// 		}
-
-// 		err = out.Close()
-// 		if err != nil {
-// 			time.Sleep(config.wait)
-// 			continue
-// 		}
-// 		t, err := times.Stat(src)
-// 		if err != nil {
-// 			time.Sleep(config.wait)
-// 			continue
-// 		}
-// 		err = os.Chtimes(dst, t.ChangeTime(), t.ModTime())
-// 		if err != nil {
-// 			time.Sleep(config.wait)
-// 			continue
-// 		}
-// 		break
-// 	}
-// 	return err
-
-// }
-
 //Verifica se existe algum item na pasta de destino que não existe na pasta da fonte e deleta todos
 func purgeItems(config *Config, path string, results chan<- ResultData) {
 	items, _ := ioutil.ReadDir(path)
@@ -209,16 +146,18 @@ func copyOrReplaceFile(config *Config, relPath string, results chan<- ResultData
 		if config.verbose {
 			fmt.Printf("Novo arquivo \"%s\"\n", relPath)
 		}
+		resultData.action = "new"
 		err := copyFile(config, sourcePath, destPath, results, &resultData)
 		checkError(err)
 
-		resultData.action = "new"
 	} else if (sourceInfo.Size() != desttInfo.Size()) || (sourceInfo.ModTime() != desttInfo.ModTime()) { //Arquivo modificado
 		if config.verbose {
 			fmt.Printf("Arquivo alterado \"%s\"\n", relPath)
 		}
-		copyFile(config, sourcePath, destPath, results, &resultData)
 		resultData.action = "update"
+		err := copyFile(config, sourcePath, destPath, results, &resultData)
+		checkError(err)
+
 	} else { // Arquivo igual
 		resultData.action = "equal"
 		resultData.n = 1
@@ -249,7 +188,7 @@ func fileWorker(jobs <-chan WorkerConfig, results chan<- ResultData, wg *sync.Wa
 
 }
 
-func update(config *Config, jobs chan WorkerConfig, results chan ResultData) {
+func update(config *Config, jobs chan WorkerConfig, results chan ResultData, largeFiles *[]string) {
 
 	//Cria a pasta de destino caso ela não exista
 	_, err := os.Stat(config.dest)
@@ -260,18 +199,32 @@ func update(config *Config, jobs chan WorkerConfig, results chan ResultData) {
 
 	var wg sync.WaitGroup
 
+	// Inicia todos os workers
 	wg.Add(config.NWorkers)
 	for i := 1; i <= config.NWorkers; i++ {
 		go fileWorker(jobs, results, &wg, i)
 	}
 
 	updateRecursively(config, config.source, jobs, results)
+
+	// Coloca mensagens de finalização para que todos os workers finalizem
 	for i := 0; i < config.NWorkers; i++ {
 		jobs <- WorkerConfig{relPath: "wfinish"}
 
 	}
-	wg.Wait()
+	wg.Wait() // Aguarda todos os workers terminarem
+
+	if config.verbose {
+		fmt.Println("Iniciando copia de arquivos grandes.")
+	}
+	config.copyLargeFiles = true
+	for _, relPath := range *largeFiles {
+
+		copyOrReplaceFile(config, relPath, results)
+	}
+
 	results <- ResultData{action: "finish"}
+
 }
 
 // Percorre todas as pastas e diretórios e faz as atualizações necessárias
@@ -321,26 +274,40 @@ type ResultData struct {
 	size   int64
 	n      int64
 	action string
+	path   string
 }
 
-func progressWork(config *Config, progress *Progress, results <-chan ResultData, finished chan<- bool) {
+// Worker responsável por calcular o progresso e printar no console.
+func progressWork(config *Config, progress *Progress, results <-chan ResultData, finished chan<- bool, largeFiles *[]string) {
 
 	for resultData := range results {
 
 		if resultData.action == "finish" {
 			break
 		}
-		progress.currentNumber += resultData.n
-		progress.currentSize += resultData.size
 		switch resultData.action {
 		case "new":
+			progress.currentNumber += resultData.n
+			progress.currentSize += resultData.size
 			progress.newFiles++
 		case "update":
+			progress.currentNumber += resultData.n
+			progress.currentSize += resultData.size
 			progress.updateFiles++
 		case "delete":
+			progress.currentNumber += resultData.n
+			progress.currentSize += resultData.size
 			progress.deletedItems++
 		case "equal":
+			progress.currentNumber += resultData.n
+			progress.currentSize += resultData.size
 			progress.equalFiles++
+		case "correction":
+			progress.currentNumber += resultData.n
+			progress.currentSize += resultData.size
+		case "large_file":
+			relPath, _ := filepath.Rel(config.source, resultData.path)
+			*largeFiles = append(*largeFiles, relPath)
 		}
 
 		progress.calculateProgress()
