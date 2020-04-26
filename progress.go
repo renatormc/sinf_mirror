@@ -10,19 +10,19 @@ import (
 
 // Estrutura que armazena informações sobre o progress
 type Progress struct {
-	totalSize     int64
-	totalNumber   int64
-	currentSize   int64
-	currentNumber int64
-	startTime     time.Time
-	elapsed       time.Duration
-	speed         float64
-	remainingTime int64
-	progressSize  float64
-	newFiles      int64
-	updateFiles   int64
-	deletedItems  int64
-	equalFiles    int64
+	totalSize     int64         // Quantidade total de bytes
+	totalNumber   int64         // Quantidade total de arquivos
+	currentSize   int64         // Quantidade de bytes já atualizados
+	currentNumber int64         // Quantidade de arquivos já atualizados
+	startTime     time.Time     // Horário de inicio do processamento
+	elapsed       time.Duration // Tempo decorrido desde o início
+	speed         float64       // Velocidade em bytes por nanosegundo
+	remainingTime int64         // Tempo que falta
+	progressSize  float64       // Progresso percentual em quantidade de bytes
+	newFiles      int64         // Quantidade de novos arquivos copiados
+	updateFiles   int64         // Quantidae de arquivos modificados
+	deletedItems  int64         // Quantidade de itens deletados, pastas e arquivos
+	equalFiles    int64         // Quantidate de arquivos iguais
 }
 
 // Calcula o progresso

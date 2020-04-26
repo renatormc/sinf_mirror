@@ -11,14 +11,15 @@ import (
 )
 
 type Config struct {
-	source     string
-	dest       string
-	verbose    bool
-	NWorkers   int
-	bufferSize int64
-	purge      bool
-	retries    int
-	wait       time.Duration
+	source     string        //pasta fonte
+	dest       string        // pasta destino
+	verbose    bool          // Imprimir mensagens extras
+	NWorkers   int           // Número de workers
+	threshold  int64         // Tamanho em megabytes a partir do qual será copiado sem concorrência
+	bufferSize int64         // Tamanho do buffer utilizado para copiar arquivos grandes
+	purge      bool          // Deletar o que existir no destino e não na fonte
+	retries    int           // Número de tentativas de copiar arquivo caso ocorra erros
+	wait       time.Duration // Tempo para aguardar antes de tentar de novo em segundos
 }
 
 func main() {
@@ -27,6 +28,7 @@ func main() {
 	source := parser.String("s", "source", &argparse.Options{Required: true, Help: "Folder to be mirrored"})
 	dest := parser.String("d", "destination", &argparse.Options{Required: true, Help: "Folder to mirror to"})
 	nWorkers := parser.Int("w", "workers", &argparse.Options{Default: 8, Help: "Number of workers"})
+	threshold := parser.Int("t", "threshold", &argparse.Options{Default: 8, Help: "Size above which there will be no concurrency"})
 	bufferSize := parser.Int("b", "buffer", &argparse.Options{Default: 1, Help: "Buffer size in megabytes"})
 	verbose := parser.Flag("v", "verbose", &argparse.Options{Default: false, Help: "Verbose"})
 	purge := parser.Flag("p", "purge", &argparse.Options{Default: false, Help: "Purge"})
@@ -46,6 +48,7 @@ func main() {
 	config.bufferSize = int64(*bufferSize) * 1048576
 	config.purge = *purge
 	config.retries = *retries
+	config.threshold = *threshold
 	config.wait = time.Duration((*waitTime) * 1000000000)
 	fmt.Println("Contando arquivos...")
 	var progress Progress
