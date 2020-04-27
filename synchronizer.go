@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"gopkg.in/djherbis/times.v1"
 )
 
@@ -109,12 +110,16 @@ func (synchronizer *Synchronizer) updateRecursively(path string) {
 			jobConfig.relPath = relPath
 			sourceInfo, err := os.Stat(sourceAbsolutePath)
 			checkError(err)
-			jobConfig.acknowledge = sourceInfo.Size() > synchronizer.threshold
+			size := sourceInfo.Size()
+			jobConfig.acknowledge = size > synchronizer.threshold
 
 			synchronizer.jobs <- jobConfig
 
 			// Aguardar copia de arquivo grande
 			if jobConfig.acknowledge {
+				if size > 1073741824 {
+					fmt.Printf("Aguardando arquivo grande: %s %s\n", relPath, humanize.Bytes(uint64(size)))
+				}
 				<-synchronizer.acknowledgeDone
 			}
 		}
@@ -144,7 +149,7 @@ OUTER:
 
 		//Em caso de erro estornar o que já foi informado para o gerenciador de progresso
 		if chargeBack != 0 {
-			synchronizer.results <- ResultData{action: "correction", size: chargeBack, n: 0}
+			synchronizer.results <- ResultData{action: resultData.action, size: chargeBack, n: 0}
 		}
 
 		chargeBack = 0
@@ -180,7 +185,7 @@ OUTER:
 					time.Sleep(synchronizer.wait)
 					continue OUTER
 				}
-				synchronizer.results <- ResultData{action: "partial_copy", n: 0, size: int64(n)}
+				synchronizer.results <- ResultData{action: resultData.action, n: 0, size: int64(n)}
 				chargeBack -= int64(n)
 			}
 		} else {

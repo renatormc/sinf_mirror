@@ -20,7 +20,7 @@ func main() {
 	// thresholdChunk := parser.Int("c", "threshold-chunk", &argparse.Options{Default: 8388600‬‬})
 	bufferSize := parser.Int("b", "buffer", &argparse.Options{Default: 1, Help: "Buffer size in megabytes"})
 	verbose := parser.Flag("v", "verbose", &argparse.Options{Default: false, Help: "Verbose"})
-	purge := parser.Flag("p", "purge", &argparse.Options{Default: false, Help: "Purge"})
+	noPurge := parser.Flag("n", "no-purge", &argparse.Options{Default: false, Help: "Don't purge"})
 	retries := parser.Int("r", "retries", &argparse.Options{Default: 10, Help: "Specifies the number of retries on failed copies"})
 	waitTime := parser.Int("i", "wait", &argparse.Options{Default: 1, Help: "Specifies the wait time between retries, in seconds."})
 	err := parser.Parse(os.Args)
@@ -37,7 +37,7 @@ func main() {
 	synchronizer.NWorkers = *nWorkers
 	synchronizer.bufferSize = int64(*bufferSize) * 1048576
 	synchronizer.thresholdChunk = int64(*thresholdChunk) * 1048576
-	synchronizer.purge = *purge
+	synchronizer.purge = !*noPurge
 	synchronizer.retries = *retries
 	synchronizer.threshold = int64(*threshold) * 1048576
 	synchronizer.wait = time.Duration((*waitTime) * 1000000000)
@@ -57,7 +57,7 @@ func main() {
 	fmt.Printf("\nTamanho total:           %s\n", humanize.Bytes(uint64(progress.totalSize)))
 	fmt.Printf("Arquivos analisados:     %d\n", progress.totalNumber)
 	fmt.Printf("Arquivos novos:          %d\n", progress.newFiles)
-	fmt.Printf("Arquivos atualizados:    %d\n", progress.updateFiles)
+	fmt.Printf("Arquivos atualizados:    %d\n", progress.updatedFiles)
 	fmt.Printf("Arquivos iguais:         %d\n", progress.equalFiles)
 	fmt.Printf("Itens deletados:         %d\n", progress.deletedItems)
 	fmt.Printf("N workers:               %d\n", synchronizer.NWorkers)
