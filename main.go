@@ -63,6 +63,6 @@ func main() {
 	fmt.Printf("N workers:               %d\n", synchronizer.NWorkers)
 	elapsed := fmtDuration(time.Duration(progress.elapsed))
 	fmt.Printf("Tempo gasto:             %s\n", elapsed)
-	speed := progress.speed * 1000000000 * 60 //bytes por minuto
+	speed := progress.avgSpeed * 1000000000 * 60 //bytes por minuto
 	fmt.Printf("Velocidade média:        %s/min\n", humanize.Bytes(uint64(speed)))
 }

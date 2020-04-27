@@ -11,22 +11,24 @@ import (
 
 // Progress armazena informações sobre o progresso
 type Progress struct {
-	totalSize     int64             // Quantidade total de bytes
-	totalNumber   int64             // Quantidade total de arquivos
-	currentSize   int64             // Quantidade de bytes já atualizados
-	currentNumber int64             // Quantidade de arquivos já atualizados
-	startTime     time.Time         // Horário de inicio do processamento
-	elapsed       time.Duration     // Tempo decorrido desde o início
-	speed         float64           // Velocidade em bytes por nanosegundo
-	remainingTime int64             // Tempo que falta
-	progressSize  float64           // Progresso percentual em quantidade de bytes
-	newFiles      int64             // Quantidade de novos arquivos copiados
-	updateFiles   int64             // Quantidae de arquivos modificados
-	deletedItems  int64             // Quantidade de itens deletados, pastas e arquivos
-	equalFiles    int64             // Quantidate de arquivos iguais
-	results       <-chan ResultData // Canal utilizado para passar os resultado das tarefas para o gerenciador de progresso
-	finished      chan bool         // Canal utilizado para informar o sincronizador que o trabalho foi finalizado
-	synchronizer  *Synchronizer     // Ponteiro a estrutura do sincronizador
+	totalSize      int64             // Quantidade total de bytes
+	totalNumber    int64             // Quantidade total de arquivos
+	currentSize    int64             // Quantidade de bytes já atualizados
+	currentNumber  int64             // Quantidade de arquivos já atualizados
+	startTime      time.Time         // Horário de inicio do processamento
+	elapsed        time.Duration     // Tempo decorrido desde o início
+	avgSpeed       float64           // Velocidade média em bytes por nanosegundo
+	speed          float64           // Velocidade instantânea em bytes por nanosegundo
+	remainingTime  int64             // Tempo que falta
+	progressSize   float64           // Progresso percentual em quantidade de bytes
+	progressNumber float64           // Progresso percentual em quantidade de arquivos
+	newFiles       int64             // Quantidade de novos arquivos copiados
+	updateFiles    int64             // Quantidae de arquivos modificados
+	deletedItems   int64             // Quantidade de itens deletados, pastas e arquivos
+	equalFiles     int64             // Quantidate de arquivos iguais
+	results        <-chan ResultData // Canal utilizado para passar os resultado das tarefas para o gerenciador de progresso
+	finished       chan bool         // Canal utilizado para informar o sincronizador que o trabalho foi finalizado
+	synchronizer   *Synchronizer     // Ponteiro a estrutura do sincronizador
 }
 
 // ResultData serve para passar dados dos workers para o gerenciador de progresso
@@ -46,16 +48,36 @@ func (progress *Progress) init() {
 	progress.finished = progress.synchronizer.finished
 }
 
-// Calcula o progresso e imprime no console
+// // Calcula o progresso e imprime no console
+// func (progress *Progress) calculateProgress() {
+// 	progress.progressSize = float64(progress.currentSize) / float64(progress.totalSize)
+// 	progress.progressNumber = float64(progress.currentNumber) / float64(progress.totalNumber)
+// 	progress.elapsed = time.Since(progress.startTime)
+// 	progress.avgSpeed = float64(progress.currentSize) / float64(progress.elapsed.Nanoseconds()) //bytes por nanosegundo
+// 	alfa := (float64(progress.totalSize-progress.currentSize) / (float64(progress.totalNumber - progress.currentNumber))) / (float64(progress.currentSize) / float64(progress.currentNumber))
+// 	alfa = 0.6*alfa + 0.4
+// 	estimatedSpeed := alfa * progress.avgSpeed
+// 	progress.remainingTime = int64(float64(progress.totalSize-progress.currentSize) / estimatedSpeed)
+// 	remainingTimeStr := fmtDuration(time.Duration(progress.remainingTime))
+// 	speed := progress.avgSpeed * 1000000000 * 60      //bytes por minuto
+// 	estimatedSpeed = estimatedSpeed * 1000000000 * 60 //bytes por minuto
+// 	fmt.Printf("Velocidade média: %s/min    Velocidade média final estimada: %s/min   %d de %d    %0.2f%%    %s\n", humanize.Bytes(uint64(speed)), humanize.Bytes(uint64(estimatedSpeed)), progress.currentNumber, progress.totalNumber, 100*progress.progressSize, remainingTimeStr)
+
+// }
+
 func (progress *Progress) calculateProgress() {
-	progress.progressSize = 100 * float64(progress.currentSize) / float64(progress.totalSize)
+	progress.progressSize = float64(progress.currentSize) / float64(progress.totalSize)
+	progress.progressNumber = float64(progress.currentNumber) / float64(progress.totalNumber)
 	progress.elapsed = time.Since(progress.startTime)
-	progress.speed = float64(progress.currentSize) / float64(progress.elapsed.Nanoseconds()) //bytes por nanosegundo
-	progress.remainingTime = int64(float64(progress.totalSize-progress.currentSize) / progress.speed)
-	// remainingTimeStr := durafmt.Parse(time.Duration(progress.remainingTime)).String()
+	progress.avgSpeed = float64(progress.currentSize) / float64(progress.elapsed.Nanoseconds()) //bytes por nanosegundo
+	alfa := (progress.progressNumber / progress.progressSize)
+	alfa = 0.6*alfa + 0.4 // Correção do alfa para que varie de forma menos agressiva
+	estimatedSpeed := alfa * progress.avgSpeed
+	progress.remainingTime = int64(float64(progress.totalSize-progress.currentSize) / estimatedSpeed)
 	remainingTimeStr := fmtDuration(time.Duration(progress.remainingTime))
-	speed := progress.speed * 1000000000 * 60 //bytes por minuto
-	fmt.Printf("%s/min    %d de %d    %0.2f%%    %s\n", humanize.Bytes(uint64(speed)), progress.currentNumber, progress.totalNumber, progress.progressSize, remainingTimeStr)
+	speed := progress.avgSpeed * 1000000000 * 60      //bytes por minuto
+	estimatedSpeed = estimatedSpeed * 1000000000 * 60 //bytes por minuto
+	fmt.Printf("Velocidade média: %s/min    Velocidade média final estimada: %s/min   %d de %d    %0.2f%%    %s\n", humanize.Bytes(uint64(speed)), humanize.Bytes(uint64(estimatedSpeed)), progress.currentNumber, progress.totalNumber, 100*progress.progressSize, remainingTimeStr)
 
 }
 
