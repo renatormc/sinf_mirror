@@ -8,6 +8,7 @@ Aplicativo feito em GO cuja finalidade é espelhar uma pasta em outra. Copia arq
 sinf_mirror.exe -s C:\caminho\pasta\fonte -d C:\caminho\pasta\destino -p
 ```
 #### Parâmetros
+```
 
 -h  --help             Print help information
 -s  --source           Folder to be mirrored
@@ -24,3 +25,4 @@ sinf_mirror.exe -s C:\caminho\pasta\fonte -d C:\caminho\pasta\destino -p
                        Default: 10
 -i  --wait             Specifies the wait time between retries, in seconds..
                          Default: 1
+```
