@@ -7,7 +7,6 @@ import (
 
 	"github.com/akamensky/argparse"
 	"github.com/dustin/go-humanize"
-	"github.com/hako/durafmt"
 )
 
 func main() {
@@ -15,7 +14,7 @@ func main() {
 	parser := argparse.NewParser("sinf-mirror", "Mirror one folder to another")
 	source := parser.String("s", "source", &argparse.Options{Required: true, Help: "Folder to be mirrored"})
 	dest := parser.String("d", "destination", &argparse.Options{Required: true, Help: "Folder to mirror to"})
-	nWorkers := parser.Int("w", "workers", &argparse.Options{Default: 8, Help: "Number of workers"})
+	nWorkers := parser.Int("w", "workers", &argparse.Options{Default: 10, Help: "Number of workers"})
 	threshold := parser.Int("t", "threshold", &argparse.Options{Default: 8, Help: "Size in megabytes above which there will be no concurrency"})
 	thresholdChunk := parser.Int("c", "threshold-chunk", &argparse.Options{Default: 8388600, Help: "Size in megabytes above which file will be copied in chunks"})
 	// thresholdChunk := parser.Int("c", "threshold-chunk", &argparse.Options{Default: 8388600‬‬})
@@ -46,7 +45,7 @@ func main() {
 	progress := Progress{synchronizer: &synchronizer}
 	progress.init()
 	progress.countFiles()
-	fmt.Printf("Número de arquivos encontrados: %d\n", progress.totalNumber)
+	fmt.Printf("N arquivos encontrados: %d\n", progress.totalNumber)
 	fmt.Printf("Total bytes: %s\n", humanize.Bytes(uint64(progress.totalSize)))
 
 	fmt.Println("Sincronizando...")
@@ -55,15 +54,15 @@ func main() {
 
 	<-progress.finished
 
-	fmt.Println("\nProcesso finalizado")
-	fmt.Printf("\nArquivos analisados: %d\n", progress.totalNumber)
-	fmt.Printf("Arquivos novos: %d\n", progress.newFiles)
-	fmt.Printf("Arquivos atualizados: %d\n", progress.updateFiles)
-	fmt.Printf("Arquivos iguais: %d\n", progress.equalFiles)
-	fmt.Printf("Itens deletados: %d\n", progress.deletedItems)
-	fmt.Printf("Número de workers: %d\n", synchronizer.NWorkers)
-	elapsed := durafmt.Parse(time.Duration(progress.elapsed)).String()
-	fmt.Printf("Tempo gasto: %s\n", elapsed)
+	fmt.Printf("\nTamanho total:           %s\n", humanize.Bytes(uint64(progress.totalSize)))
+	fmt.Printf("Arquivos analisados:     %d\n", progress.totalNumber)
+	fmt.Printf("Arquivos novos:          %d\n", progress.newFiles)
+	fmt.Printf("Arquivos atualizados:    %d\n", progress.updateFiles)
+	fmt.Printf("Arquivos iguais:         %d\n", progress.equalFiles)
+	fmt.Printf("Itens deletados:         %d\n", progress.deletedItems)
+	fmt.Printf("N workers:               %d\n", synchronizer.NWorkers)
+	elapsed := fmtDuration(time.Duration(progress.elapsed))
+	fmt.Printf("Tempo gasto:             %s\n", elapsed)
 	speed := progress.speed * 1000000000 * 60 //bytes por minuto
-	fmt.Printf("Velocidade média: %s/min\n", humanize.Bytes(uint64(speed)))
+	fmt.Printf("Velocidade média:        %s/min\n", humanize.Bytes(uint64(speed)))
 }

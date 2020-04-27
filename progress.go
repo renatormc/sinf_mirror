@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/hako/durafmt"
 )
 
 // Progress armazena informações sobre o progresso
@@ -53,9 +52,10 @@ func (progress *Progress) calculateProgress() {
 	progress.elapsed = time.Since(progress.startTime)
 	progress.speed = float64(progress.currentSize) / float64(progress.elapsed.Nanoseconds()) //bytes por nanosegundo
 	progress.remainingTime = int64(float64(progress.totalSize-progress.currentSize) / progress.speed)
-	remainingTimeStr := durafmt.Parse(time.Duration(progress.remainingTime)).String()
+	// remainingTimeStr := durafmt.Parse(time.Duration(progress.remainingTime)).String()
+	remainingTimeStr := fmtDuration(time.Duration(progress.remainingTime))
 	speed := progress.speed * 1000000000 * 60 //bytes por minuto
-	fmt.Printf("%s/min    %d de %d    %0.2f%%    Estimado: %s\n", humanize.Bytes(uint64(speed)), progress.currentNumber, progress.totalNumber, progress.progressSize, remainingTimeStr)
+	fmt.Printf("%s/min    %d de %d    %0.2f%%    %s\n", humanize.Bytes(uint64(speed)), progress.currentNumber, progress.totalNumber, progress.progressSize, remainingTimeStr)
 
 }
 
