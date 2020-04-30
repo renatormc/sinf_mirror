@@ -15,7 +15,9 @@ import (
 
 // Synchronizer matém as configuraçõse do programa
 type Synchronizer struct {
-	source          string          //pasta fonte
+	autoFind        bool            // Marca se o modo utilizado é o de localizar automaticamente as pastas do caso
+	sources         []string        // pastas fontes
+	source          string          // Pasta fonte corrente
 	dest            string          // pasta destino
 	verbose         bool            // Imprimir mensagens extras
 	NWorkers        int             // Número de workers
@@ -43,31 +45,33 @@ func (synchronizer *Synchronizer) init() {
 // O sincronzador coloca uma tarefa e espera até que algum worker a pegue pra fazer para só então colocar a próxima no canal
 func (synchronizer *Synchronizer) run() {
 
+	synchronizer.acknowledgeDone = make(chan bool)
+
 	//Cria a pasta de destino caso ela não exista
 	_, err := os.Stat(synchronizer.dest)
 	if os.IsNotExist(err) {
+		fmt.Printf("DEBUG: %s\n", synchronizer.dest)
 		err := os.MkdirAll(synchronizer.dest, os.ModePerm)
 		checkError(err)
 	}
+	for _, source := range synchronizer.sources {
+		synchronizer.source = source
 
-	synchronizer.acknowledgeDone = make(chan bool)
+		// Inicia todos os workers
+		synchronizer.wg.Add(synchronizer.NWorkers)
+		for i := 1; i <= synchronizer.NWorkers; i++ {
+			worker := Worker{synchronizer: synchronizer, id: i}
+			worker.init()
+			go worker.run()
+		}
+		synchronizer.updateRecursively(synchronizer.source)
+		// Coloca mensagens de finalização para que todos os workers finalizem
+		for i := 0; i < synchronizer.NWorkers; i++ {
+			synchronizer.jobs <- JobConfig{relPath: "wfinish"}
 
-	// Inicia todos os workers
-	synchronizer.wg.Add(synchronizer.NWorkers)
-	for i := 1; i <= synchronizer.NWorkers; i++ {
-		worker := Worker{synchronizer: synchronizer, id: i}
-		worker.init()
-		go worker.run()
+		}
+		synchronizer.wg.Wait() // Aguarda todos os workers terminarem
 	}
-
-	synchronizer.updateRecursively(synchronizer.source)
-
-	// Coloca mensagens de finalização para que todos os workers finalizem
-	for i := 0; i < synchronizer.NWorkers; i++ {
-		synchronizer.jobs <- JobConfig{relPath: "wfinish"}
-
-	}
-	synchronizer.wg.Wait() // Aguarda todos os workers terminarem
 
 	synchronizer.results <- ResultData{action: "finish"}
 
@@ -105,7 +109,7 @@ func (synchronizer *Synchronizer) updateRecursively(path string) {
 
 			synchronizer.updateRecursively(sourceAbsolutePath)
 
-		} else {
+		} else if synchronizer.autoFind == false || item.Name() != ".sinf_mark.json" {
 			var jobConfig JobConfig
 			jobConfig.relPath = relPath
 			sourceInfo, err := os.Stat(sourceAbsolutePath)
@@ -227,17 +231,27 @@ func (synchronizer *Synchronizer) purgeItems(path string) {
 	items, _ := ioutil.ReadDir(path)
 	for _, item := range items {
 		destAbsolutePath := filepath.Join(path, item.Name())
+		if synchronizer.autoFind == true && item.Name() == ".sinf_mark.json" {
+			continue
+		}
 		relPath, _ := filepath.Rel(synchronizer.dest, destAbsolutePath)
-		sourceAbsolutePath := filepath.Join(synchronizer.source, relPath)
 
-		//Se não existir a pasta na fonte deletar
-		_, err := os.Stat(sourceAbsolutePath)
-		if os.IsNotExist(err) {
+		//Se não existir a pasta nas fontes deletar
+		exists := false
+		for _, source := range synchronizer.sources {
+			sourceAbsolutePath := filepath.Join(source, relPath)
+			_, err := os.Stat(sourceAbsolutePath)
+			if !os.IsNotExist(err) {
+				exists = true
+				break
+			}
+		}
+		if !exists {
 
 			if synchronizer.verbose {
 				fmt.Printf("Deletando item %s\n", destAbsolutePath)
 			}
-			err = os.RemoveAll(destAbsolutePath)
+			err := os.RemoveAll(destAbsolutePath)
 			checkError(err)
 			synchronizer.results <- ResultData{action: "delete", size: 0, n: 0}
 		}

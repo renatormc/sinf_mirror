@@ -120,7 +120,11 @@ func (progress *Progress) calculateProgress(action string) {
 func (progress *Progress) countFiles() {
 	progress.totalNumber = 0
 	progress.totalSize = 0
-	progress.countFilesRecursively(progress.synchronizer.source)
+	for _, source := range progress.synchronizer.sources {
+		progress.synchronizer.source = source
+		progress.countFilesRecursively(progress.synchronizer.source)
+	}
+
 	progress.totalToCopyNumber = progress.totalNumber
 	progress.totalToCopySize = progress.totalSize
 }
@@ -132,8 +136,11 @@ func (progress *Progress) countFilesRecursively(path string) {
 		if item.IsDir() {
 			progress.countFilesRecursively(filepath.Join(path, item.Name()))
 		} else {
-			progress.totalNumber++
-			progress.totalSize += item.Size()
+			if progress.synchronizer.autoFind == false || item.Name() != ".sinf_mark.json" {
+				progress.totalNumber++
+				progress.totalSize += item.Size()
+			}
+
 		}
 	}
 }
