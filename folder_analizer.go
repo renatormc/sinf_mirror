@@ -43,7 +43,7 @@ func (folderAnalyzer *FolderAnalyzer) checkFolder(path string) bool {
 	checkError(err)
 	if data.Name == folderAnalyzer.Name {
 		switch data.Role {
-		case "processamento":
+		case "temp":
 			folderAnalyzer.Sources = append(folderAnalyzer.Sources, path)
 		case "final":
 			folderAnalyzer.Destination = path
