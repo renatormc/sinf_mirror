@@ -21,7 +21,7 @@ func main() {
 	thresholdChunk := parser.Int("k", "threshold-chunk", &argparse.Options{Default: 8388600, Help: "Size in megabytes above which file will be copied in chunks"})
 	bufferSize := parser.Int("b", "buffer", &argparse.Options{Default: 1, Help: "Buffer size in megabytes"})
 	verbose := parser.Flag("v", "verbose", &argparse.Options{Default: false, Help: "Verbose"})
-	purge := parser.Flag("n", "purge", &argparse.Options{Default: false, Help: "Purge"})
+	purge := parser.Flag("p", "purge", &argparse.Options{Default: false, Help: "Purge"})
 	retries := parser.Int("r", "retries", &argparse.Options{Default: 10, Help: "Specifies the number of retries on failed copies"})
 	waitTime := parser.Int("i", "wait", &argparse.Options{Default: 1, Help: "Specifies the wait time between retries, in seconds."})
 	err := parser.Parse(os.Args)
