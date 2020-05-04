@@ -52,8 +52,7 @@ func main() {
 		}
 		synchronizer.sources = folderAnalyzer.Sources
 		synchronizer.dest = folderAnalyzer.Destination
-		// fmt.Println(synchronizer.sources, synchronizer.dest)
-		// os.Exit(0)
+
 	}
 	synchronizer.verbose = *verbose
 	synchronizer.NWorkers = *nWorkers

@@ -61,23 +61,6 @@ func (progress *Progress) init() {
 	progress.finished = progress.synchronizer.finished
 }
 
-// // Calcula o progresso e imprime no console
-// func (progress *Progress) calculateProgress() {
-// 	progress.progressSize = float64(progress.currentSize) / float64(progress.totalSize)
-// 	progress.progressNumber = float64(progress.currentNumber) / float64(progress.totalNumber)
-// 	progress.elapsed = time.Since(progress.startTime)
-// 	progress.avgSpeed = float64(progress.currentSize) / float64(progress.elapsed.Nanoseconds()) //bytes por nanosegundo
-// 	alfa := (float64(progress.totalSize-progress.currentSize) / (float64(progress.totalNumber - progress.currentNumber))) / (float64(progress.currentSize) / float64(progress.currentNumber))
-// 	alfa = 0.6*alfa + 0.4
-// 	estimatedSpeed := alfa * progress.avgSpeed
-// 	progress.remainingTime = int64(float64(progress.totalSize-progress.currentSize) / estimatedSpeed)
-// 	remainingTimeStr := fmtDuration(time.Duration(progress.remainingTime))
-// 	speed := progress.avgSpeed * 1000000000 * 60      //bytes por minuto
-// 	estimatedSpeed = estimatedSpeed * 1000000000 * 60 //bytes por minuto
-// 	fmt.Printf("Velocidade média: %s/min    Velocidade média final estimada: %s/min   %d de %d    %0.2f%%    %s\n", humanize.Bytes(uint64(speed)), humanize.Bytes(uint64(estimatedSpeed)), progress.currentNumber, progress.totalNumber, 100*progress.progressSize, remainingTimeStr)
-
-// }
-
 func (progress *Progress) calculateProgress(action string) {
 	var speed float64
 	var estimatedSpeed float64
@@ -112,7 +95,7 @@ func (progress *Progress) calculateProgress(action string) {
 		eta2Str = fmtTime(progress.eta2)
 	}
 
-	fmt.Printf("%-8v  %s/min  %d/%d    %0.2f%%      %s  %s       %s  %s \n", action, humanize.Bytes(uint64(speed)), progress.currentNumber, progress.totalNumber, 100*progress.progressSize, remainingTimeStr, etaStr, remainingTimeStr2, eta2Str)
+	fmt.Printf("%-8v  %s/min  %d/%d    %0.2f%%      Estimado 1: %s  %s       Estimado 2: %s  %s \n", action, humanize.Bytes(uint64(speed)), progress.currentNumber, progress.totalNumber, 100*progress.progressSize, remainingTimeStr, etaStr, remainingTimeStr2, eta2Str)
 
 }
 

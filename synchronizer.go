@@ -113,7 +113,13 @@ func (synchronizer *Synchronizer) updateRecursively(path string) {
 			var jobConfig JobConfig
 			jobConfig.relPath = relPath
 			sourceInfo, err := os.Stat(sourceAbsolutePath)
-			checkError(err)
+			if os.IsNotExist(err) {
+				fmt.Fprintf(os.Stderr, "Erro ao copiar o arquivo %s. Arquivo nao encontrado.\n", sourceAbsolutePath)
+				continue
+			} else {
+				checkError(err)
+			}
+
 			size := sourceInfo.Size()
 			jobConfig.acknowledge = size > synchronizer.threshold
 
