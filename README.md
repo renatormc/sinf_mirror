@@ -9,20 +9,22 @@ sinf_mirror.exe -s C:\caminho\pasta\fonte -d C:\caminho\pasta\destino -p
 ```
 #### Parâmetros
 ```
-
--h  --help             Print help information
--s  --source           Folder to be mirrored
--d  --destination      Folder to mirror to
--w  --workers          Number of workers. Default: 10
--t  --threshold        Size in megabytes above which there will be no
-                       concurrency. Default: 8
--c  --threshold-chunk  Size in megabytes above which file will be copied in
-                       chunks. Default: 8388600
--b  --buffer           Buffer size in megabytes. Default: 1
--v  --verbose          Verbose. Default: false
--p  --purge            Purge. Default: false
--r  --retries          Specifies the number of retries on failed copies.
-                       Default: 10
--i  --wait             Specifies the wait time between retries, in seconds..
+  -h  --help             Print help information
+  -s  --source           Folder to be mirrored
+  -d  --destination      Folder to mirror to
+  -c  --casename         Case name. Default: !!
+  -m  --max-deep         How deep the program search for case folders. Default:
+                         3
+  -w  --workers          Number of workers. Default: 10
+  -t  --threshold        Size in megabytes above which there will be no
+                         concurrency. Default: 8
+  -k  --threshold-chunk  Size in megabytes above which file will be copied in
+                         chunks. Default: 8388600
+  -b  --buffer           Buffer size in megabytes. Default: 1
+  -v  --verbose          Verbose. Default: false
+  -p  --purge            Purge. Default: false
+  -r  --retries          Specifies the number of retries on failed copies.
+                         Default: 10
+  -i  --wait             Specifies the wait time between retries, in seconds..
                          Default: 1
 ```
