@@ -15,7 +15,7 @@ func main() {
 	sources := parser.StringList("s", "source", &argparse.Options{Help: "Folder to be mirrored"})
 	dest := parser.String("d", "destination", &argparse.Options{Help: "Folder to mirror to"})
 	caseName := parser.String("c", "casename", &argparse.Options{Default: "!!", Help: "Case name"})
-	maxDeep := parser.Int("m", "max-deep", &argparse.Options{Default: 3, Help: "How deep the program search for case folders"})
+	maxDeep := parser.Int("m", "max-deep", &argparse.Options{Default: 5, Help: "How deep the program search for case folders"})
 	nWorkers := parser.Int("w", "workers", &argparse.Options{Default: 10, Help: "Number of workers"})
 	threshold := parser.Int("t", "threshold", &argparse.Options{Default: 8, Help: "Size in megabytes above which there will be no concurrency"})
 	thresholdChunk := parser.Int("k", "threshold-chunk", &argparse.Options{Default: 8388600, Help: "Size in megabytes above which file will be copied in chunks"})
@@ -52,7 +52,6 @@ func main() {
 		}
 		synchronizer.sources = folderAnalyzer.Sources
 		synchronizer.dest = folderAnalyzer.Destination
-
 	}
 	synchronizer.verbose = *verbose
 	synchronizer.NWorkers = *nWorkers
