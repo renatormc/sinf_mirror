@@ -298,3 +298,13 @@ func (synchronizer *Synchronizer) copyOrReplaceFile(relPath string) {
 	}
 
 }
+
+// func (synchronizer *Synchronizer) checkPaths() {
+
+// 	for _, source := range synchronizer.sources {
+// 		fmt.Printf("DEBUG: %s\n", source)
+// 		if strings.HasSuffix(source, "\\") {
+// 			fmt.Println(source)
+// 		}
+// 	}
+// }
