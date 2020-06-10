@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"gopkg.in/djherbis/times.v1"
 )
 
 // Synchronizer matém as configuraçõse do programa
@@ -212,16 +211,14 @@ OUTER:
 			time.Sleep(synchronizer.wait)
 			continue
 		}
-		t, err := times.Stat(src)
-		if err != nil {
-			time.Sleep(synchronizer.wait)
-			continue
-		}
-		err = os.Chtimes(dst, t.ChangeTime(), t.ModTime())
-		if err != nil {
-			time.Sleep(synchronizer.wait)
-			continue
-		}
+
+		// fmt.Printf("Tempos %T %T\n", t.ChangeTime(), t.ModTime())
+		// err2 := os.Chtimes(dst, cTime, mTime)
+		// if err2 != nil {
+		// 	fmt.Fprintf(os.Stderr, "Não foi possível mudar os carimbos de hora do arquivo \"%s\"\n", dst)
+		// 	// time.Sleep(synchronizer.wait)
+		// 	// continue
+		// }
 
 		//Informa gerenciador de progresso que um arquivo terminou sua copia
 		resultData.n = 1
@@ -280,7 +277,10 @@ func (synchronizer *Synchronizer) copyOrReplaceFile(relPath string) {
 		}
 		resultData.action = "new"
 		err := synchronizer.copyFile(sourcePath, destPath, &resultData)
-		checkError(err)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Não foi possível copiar o arquivo \"%s\"\n", sourcePath)
+		}
+		// checkError(err)
 		//Arquivo modificado
 	} else if (sourceInfo.Size() != desttInfo.Size()) || (sourceInfo.ModTime() != desttInfo.ModTime()) {
 		if synchronizer.verbose {
@@ -288,7 +288,10 @@ func (synchronizer *Synchronizer) copyOrReplaceFile(relPath string) {
 		}
 		resultData.action = "update"
 		err := synchronizer.copyFile(sourcePath, destPath, &resultData)
-		checkError(err)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Não foi possível copiar o arquivo \"%s\"\n", sourcePath)
+		}
+		// checkError(err)
 		// Arquivo igual
 	} else {
 		resultData.action = "equal"
@@ -298,13 +301,3 @@ func (synchronizer *Synchronizer) copyOrReplaceFile(relPath string) {
 	}
 
 }
-
-// func (synchronizer *Synchronizer) checkPaths() {
-
-// 	for _, source := range synchronizer.sources {
-// 		fmt.Printf("DEBUG: %s\n", source)
-// 		if strings.HasSuffix(source, "\\") {
-// 			fmt.Println(source)
-// 		}
-// 	}
-// }
