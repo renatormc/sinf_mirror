@@ -8,11 +8,49 @@ import (
 	"time"
 )
 
+// Win32FileAttributeData mantém atributos de arquivo do windows
+type Win32FileAttributeData struct {
+	FileAttributes uint32
+	CreationTime   syscall.Filetime
+	LastAccessTime syscall.Filetime
+	LastWriteTime  syscall.Filetime
+	FileSizeHigh   uint32
+	FileSizeLow    uint32
+}
+
 func checkError(e error) {
 	if e != nil {
 		panic(e)
 	}
 }
+
+func copyTimes(src string, dst string) {
+	fi, err := os.Lstat(src)
+	checkError(err)
+	d := fi.Sys().(*syscall.Win32FileAttributeData)
+	mTime := time.Unix(0, d.LastWriteTime.Nanoseconds())
+	aTime := time.Unix(0, d.LastAccessTime.Nanoseconds())
+	err = os.Chtimes(dst, aTime, mTime)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Não foi possível mudar os carimbos de hora do arquivo \"%s\"\n", dst)
+
+	}
+	// fmt.Println(d.CreationTime.Nanoseconds())
+}
+
+// func compareFiles(src string, dst string) bool {
+// 	fiSrc, err := os.Lstat(src)
+// 	checkError(err)
+// 	fiDst, err := os.Lstat(dst)
+// 	checkError(err)
+// 	if fiSrc.FileSizeHigh != fiDst.FileSizeHigh ||  fiSrc.FileSizeLow != fiDst.FileSizeLow {
+// 		return false
+// 	}
+// 	if fiSrc.LastWriteTime != fiDst.LastWriteTime {
+// 		return false
+// 	}
+// 	return true
+// }
 
 func fmtDuration(d time.Duration) string {
 	secs := d.Seconds()

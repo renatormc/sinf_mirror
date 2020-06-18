@@ -212,6 +212,8 @@ OUTER:
 			continue
 		}
 
+		copyTimes(src, dst)
+
 		// fmt.Printf("Tempos %T %T\n", t.ChangeTime(), t.ModTime())
 		// err2 := os.Chtimes(dst, cTime, mTime)
 		// if err2 != nil {
