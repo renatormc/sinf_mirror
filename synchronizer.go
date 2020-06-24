@@ -303,3 +303,14 @@ func (synchronizer *Synchronizer) copyOrReplaceFile(relPath string) {
 	}
 
 }
+
+func (synchronizer *Synchronizer) foldersOK() {
+	for _, source := range synchronizer.sources {
+		_, err := os.Stat(source)
+		if os.IsNotExist(err) {
+			fmt.Printf("O diretório \"%s\" não existe.", source)
+			os.Exit(1)
+		}
+		checkError(err)
+	}
+}

@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
+	"log"
 	"math"
 	"os"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -20,7 +23,8 @@ type Win32FileAttributeData struct {
 
 func checkError(e error) {
 	if e != nil {
-		panic(e)
+		// panic(e)
+		log.Fatal(e)
 	}
 }
 
@@ -96,4 +100,20 @@ func fileExists(filename string) bool {
 		return false
 	}
 	return !info.IsDir()
+}
+
+func getInputsFromFile(path string) ([]string, string) {
+	file, err := os.Open(path)
+	checkError(err)
+	defer file.Close()
+
+	b, err := ioutil.ReadAll(file)
+	text := strings.TrimSpace(string(b))
+	lines := strings.Split(text, "\n")
+	sources := strings.Split(lines[0], ",")
+	for i := 0; i < len(sources); i++ {
+		sources[i] = strings.TrimSpace(sources[i])
+	}
+	dest := strings.TrimSpace(lines[1])
+	return sources, dest
 }

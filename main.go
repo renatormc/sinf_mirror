@@ -14,12 +14,12 @@ func main() {
 	parser := argparse.NewParser("sinf-mirror", "Mirror one folder to another")
 	sources := parser.StringList("s", "source", &argparse.Options{Help: "Folder to be mirrored"})
 	dest := parser.String("d", "destination", &argparse.Options{Help: "Folder to mirror to"})
-	caseName := parser.String("c", "casename", &argparse.Options{Default: "!!", Help: "Case name"})
-	maxDeep := parser.Int("m", "max-deep", &argparse.Options{Default: 5, Help: "How deep the program search for case folders"})
+	inputFile := parser.String("f", "input-file", &argparse.Options{Default: "null", Help: "Input file with sources and destination"})
+	// caseName := parser.String("c", "casename", &argparse.Options{Default: "!!", Help: "Case name"})
 	nWorkers := parser.Int("w", "workers", &argparse.Options{Default: 10, Help: "Number of workers"})
 	threshold := parser.Int("t", "threshold", &argparse.Options{Default: 8, Help: "Size in megabytes above which there will be no concurrency"})
 	thresholdChunk := parser.Int("k", "threshold-chunk", &argparse.Options{Default: 8388600, Help: "Size in megabytes above which file will be copied in chunks"})
-	bufferSize := parser.Int("b", "buffer", &argparse.Options{Default: 1, Help: "Buffer size in megabytes"})
+	bufferSize := parser.Int("b", "buffer", &argparse.Options{Default: 1, Help: "Buffer sisfgze in megabytes"})
 	verbose := parser.Flag("v", "verbose", &argparse.Options{Default: false, Help: "Verbose"})
 	purge := parser.Flag("p", "purge", &argparse.Options{Default: false, Help: "Purge"})
 	retries := parser.Int("r", "retries", &argparse.Options{Default: 10, Help: "Specifies the number of retries on failed copies"})
@@ -32,27 +32,15 @@ func main() {
 
 	var synchronizer Synchronizer
 	synchronizer.init()
-	if *caseName == "!!" {
+	if *inputFile == "null" {
 		synchronizer.sources = *sources
 		synchronizer.dest = *dest
 		synchronizer.autoFind = false
 	} else {
 		synchronizer.autoFind = true
-		folderAnalyzer := FolderAnalyzer{MaxDeep: *maxDeep}
-		folderAnalyzer.init()
-		fmt.Println("Procurando pastas do caso...")
-		folderAnalyzer.findFolders(*caseName)
-		if len(folderAnalyzer.Sources) == 0 {
-			fmt.Println("Não foi encontrada nenhuma pasta com dados do caso a serem copiados.")
-			os.Exit(1)
-		}
-		if folderAnalyzer.Destination == "" {
-			fmt.Println("A pasta de destino não foi encontrada.")
-			os.Exit(1)
-		}
-		synchronizer.sources = folderAnalyzer.Sources
-		synchronizer.dest = folderAnalyzer.Destination
+		synchronizer.sources, synchronizer.dest = getInputsFromFile(*inputFile)
 	}
+	synchronizer.foldersOK()
 	synchronizer.verbose = *verbose
 	synchronizer.NWorkers = *nWorkers
 	synchronizer.bufferSize = int64(*bufferSize) * 1048576
