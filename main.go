@@ -44,11 +44,11 @@ func main() {
 		synchronizer.autoFind = true
 		synchronizer.scanDrives()
 		if len(synchronizer.sources) == 0 {
-			fmt.Printf("Não foi encontrada nenhuma pasta temp relacionada ao caso %s\n", synchronizer.caseName)
+			fmt.Printf("Não foi encontrada nenhuma pasta temp relacionada ao caso \"%s\"\n", synchronizer.caseName)
 			os.Exit(1)
 		}
 		if synchronizer.dest == "" {
-			fmt.Printf("Não foi encontrada nenhuma pasta final relacionada ao caso %s\n", synchronizer.caseName)
+			fmt.Printf("Não foi encontrada nenhuma pasta final relacionada ao caso \"%s\"\n", synchronizer.caseName)
 			os.Exit(1)
 		}
 
