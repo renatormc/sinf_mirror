@@ -17,6 +17,7 @@ func main() {
 	inputFile := parser.String("f", "input-file", &argparse.Options{Default: "null", Help: "Input file with sources and destination"})
 	caseName := parser.String("c", "casename", &argparse.Options{Default: "null", Help: "Case name"})
 	nWorkers := parser.Int("w", "workers", &argparse.Options{Default: 10, Help: "Number of workers"})
+	maxDepth := parser.Int("m", "max-depth", &argparse.Options{Default: 5, Help: "Max depth to scan for case folders"})
 	threshold := parser.Int("t", "threshold", &argparse.Options{Default: 8, Help: "Size in megabytes above which there will be no concurrency"})
 	thresholdChunk := parser.Int("k", "threshold-chunk", &argparse.Options{Default: 8388600, Help: "Size in megabytes above which file will be copied in chunks"})
 	bufferSize := parser.Int("b", "buffer", &argparse.Options{Default: 1, Help: "Buffer sisfgze in megabytes"})
@@ -31,15 +32,26 @@ func main() {
 	}
 
 	var synchronizer Synchronizer
+	synchronizer.maxDepth = *maxDepth
+	synchronizer.caseName = *caseName
 	synchronizer.init()
 	if *inputFile != "null" {
 		synchronizer.sources = *sources
 		synchronizer.dest = *dest
 		synchronizer.autoFind = false
-	} else if *caseName != "null" {
+	} else if synchronizer.caseName != "null" {
+		fmt.Printf("Sincronizar pastas do caso %s\n", synchronizer.caseName)
 		synchronizer.autoFind = true
-		synchronizer.sources, synchronizer.dest = getFoldersFromCaseName(*caseName)
-		os.Exit(0)
+		synchronizer.scanDrives()
+		if len(synchronizer.sources) == 0 {
+			fmt.Printf("Não foi encontrada nenhuma pasta temp relacionada ao caso %s\n", synchronizer.caseName)
+			os.Exit(1)
+		}
+		if synchronizer.dest == "" {
+			fmt.Printf("Não foi encontrada nenhuma pasta final relacionada ao caso %s\n", synchronizer.caseName)
+			os.Exit(1)
+		}
+
 	} else {
 		synchronizer.autoFind = true
 		synchronizer.sources, synchronizer.dest = getInputsFromFile(*inputFile)

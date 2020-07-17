@@ -12,9 +12,15 @@ import (
 //Marker stores a marker info
 type Marker struct {
 	Type    string `json:"type"`
+	Name    string `json:"name"`
 	Subtype string `json:"subtype"`
 	Role    string `json:"role"`
 }
+
+// type FoundFolders struct {
+// 	Sources []string
+// 	Dest    string
+// }
 
 func bitsToDrives(bitMap uint32) (drives []string) {
 	availableDrives := []string{"A:\\.", "B:\\.", "C:\\.", "D:\\.", "E:\\.", "F:\\.", "G:\\.", "H:\\.", "I:\\.", "J:\\.", "K:\\.", "L:\\.", "M:\\.", "N:\\.", "O:\\.", "P:\\.", "Q:\\.", "R:\\.", "S:\\.", "T:\\.", "U:\\.", "V:\\.", "W:\\.", "X:\\.", "Y:\\.", "Z:\\."}
@@ -41,17 +47,24 @@ func getDrives() []string {
 	return drives
 }
 
-func checkFolder(path string) *Marker {
-	path = filepath.Join(path, ".sinf_mark.json")
-	jsonFile, err := os.Open(path)
-	if os.IsNotExist(err) {
-		return nil
+func isCase(folder string, caseName string) (bool, *Marker) {
+	markers := getMarkers(folder)
+	for _, marker := range markers {
+		if marker.Type == "case" && marker.Name == caseName {
+			return true, &marker
+		}
 	}
-	defer jsonFile.Close()
-	byteValue, _ := ioutil.ReadAll(jsonFile)
-	var markers []Marker
-	json.Unmarshal([]byte(byteValue), &markers)
-	return nil
+	return false, nil
+}
+
+func isDrive(folder string) (bool, *Marker) {
+	markers := getMarkers(folder)
+	for _, marker := range markers {
+		if marker.Type == "disk" {
+			return true, &marker
+		}
+	}
+	return false, nil
 }
 
 func getMarkers(folder string) []Marker {
@@ -67,9 +80,39 @@ func getMarkers(folder string) []Marker {
 	return markers
 }
 
-func getFoldersFromCaseName(casename string) ([]string, string) {
-	for _, drive := range getDrives() {
-		fmt.Println((drive))
+func (synchronizer *Synchronizer) scanFolder(folder string, depth int) {
+	if depth > synchronizer.maxDepth {
+		return
 	}
-	return nil, ""
+	res, marker := isCase(folder, synchronizer.caseName)
+	if res {
+		switch marker.Role {
+		case "temp":
+			synchronizer.sources = append(synchronizer.sources, folder)
+			break
+
+		case "final":
+			synchronizer.dest = folder
+			break
+		}
+
+	} else {
+		items, _ := ioutil.ReadDir(folder)
+		for _, item := range items {
+			if item.IsDir() {
+				synchronizer.scanFolder(filepath.Join(folder, item.Name()), depth+1)
+			}
+		}
+	}
+}
+
+func (synchronizer *Synchronizer) scanDrives() {
+	fmt.Printf("Iniciando vasculhamento de pastas com profundidade máxima de %d\n", synchronizer.maxDepth)
+	for _, drive := range getDrives() {
+		res, _ := isDrive(drive)
+		if res {
+			fmt.Printf("Vasculhando drive %s\n", drive)
+			synchronizer.scanFolder(drive, 1)
+		}
+	}
 }

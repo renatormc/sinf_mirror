@@ -17,9 +17,11 @@ type Synchronizer struct {
 	autoFind        bool            // Marca se o modo utilizado é o de localizar automaticamente as pastas do caso
 	sources         []string        // pastas fontes
 	source          string          // Pasta fonte corrente
+	caseName        string          // Nome do caso
 	dest            string          // pasta destino
 	verbose         bool            // Imprimir mensagens extras
 	NWorkers        int             // Número de workers
+	maxDepth        int             // Profundida máxia para busca de pastas de caso
 	threshold       int64           // Tamanho em megabytes a partir do qual será copiado sem concorrência
 	thresholdChunk  int64           // Tamanho acima do qual o arquivo será copiado em partes
 	bufferSize      int64           // Tamanho do buffer utilizado para copiar arquivos grandes
