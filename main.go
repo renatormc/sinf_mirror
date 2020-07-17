@@ -15,7 +15,7 @@ func main() {
 	sources := parser.StringList("s", "source", &argparse.Options{Help: "Folder to be mirrored"})
 	dest := parser.String("d", "destination", &argparse.Options{Help: "Folder to mirror to"})
 	inputFile := parser.String("f", "input-file", &argparse.Options{Default: "null", Help: "Input file with sources and destination"})
-	// caseName := parser.String("c", "casename", &argparse.Options{Default: "!!", Help: "Case name"})
+	caseName := parser.String("c", "casename", &argparse.Options{Default: "null", Help: "Case name"})
 	nWorkers := parser.Int("w", "workers", &argparse.Options{Default: 10, Help: "Number of workers"})
 	threshold := parser.Int("t", "threshold", &argparse.Options{Default: 8, Help: "Size in megabytes above which there will be no concurrency"})
 	thresholdChunk := parser.Int("k", "threshold-chunk", &argparse.Options{Default: 8388600, Help: "Size in megabytes above which file will be copied in chunks"})
@@ -32,10 +32,14 @@ func main() {
 
 	var synchronizer Synchronizer
 	synchronizer.init()
-	if *inputFile == "null" {
+	if *inputFile != "null" {
 		synchronizer.sources = *sources
 		synchronizer.dest = *dest
 		synchronizer.autoFind = false
+	} else if *caseName != "null" {
+		synchronizer.autoFind = true
+		synchronizer.sources, synchronizer.dest = getFoldersFromCaseName(*caseName)
+		os.Exit(0)
 	} else {
 		synchronizer.autoFind = true
 		synchronizer.sources, synchronizer.dest = getInputsFromFile(*inputFile)
