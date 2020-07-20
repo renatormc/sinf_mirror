@@ -36,9 +36,9 @@ func main() {
 	synchronizer.caseName = *caseName
 	synchronizer.init()
 	if *inputFile != "null" {
-		synchronizer.sources = *sources
-		synchronizer.dest = *dest
-		synchronizer.autoFind = false
+		synchronizer.autoFind = true
+		synchronizer.sources, synchronizer.dest = getInputsFromFile(*inputFile)
+
 	} else if synchronizer.caseName != "null" {
 		fmt.Printf("Sincronizar pastas do caso %s\n", synchronizer.caseName)
 		synchronizer.autoFind = true
@@ -53,8 +53,9 @@ func main() {
 		}
 
 	} else {
-		synchronizer.autoFind = true
-		synchronizer.sources, synchronizer.dest = getInputsFromFile(*inputFile)
+		synchronizer.sources = *sources
+		synchronizer.dest = *dest
+		synchronizer.autoFind = false
 	}
 	synchronizer.foldersOK()
 	synchronizer.verbose = *verbose
