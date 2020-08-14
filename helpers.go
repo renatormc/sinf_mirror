@@ -30,7 +30,9 @@ func checkError(e error) {
 
 func copyTimes(src string, dst string) {
 	fi, err := os.Lstat(src)
-	checkError(err)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Não foi possível mudar os carimbos de hora do arquivo \"%s\"\n", dst)
+	}
 	d := fi.Sys().(*syscall.Win32FileAttributeData)
 	mTime := time.Unix(0, d.LastWriteTime.Nanoseconds())
 	aTime := time.Unix(0, d.LastAccessTime.Nanoseconds())
