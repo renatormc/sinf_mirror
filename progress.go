@@ -96,6 +96,7 @@ func (progress *Progress) calculateProgress(action string) {
 	}
 
 	fmt.Printf("%-8v  %s/min  %d/%d    %0.2f%%      Estimado 1: %s  %s       Estimado 2: %s  %s \n", action, humanize.Bytes(uint64(speed)), progress.currentNumber, progress.totalNumber, 100*progress.progressSize, remainingTimeStr, etaStr, remainingTimeStr2, eta2Str)
+	//a leitura dos parâmetros dessa linha é complicada para usuários non-dev
 
 }
 
@@ -136,6 +137,7 @@ func (progress *Progress) run() {
 	for resultData := range progress.results {
 
 		if resultData.action == "finish" {
+
 			break
 		}
 		switch resultData.action {
@@ -167,4 +169,8 @@ func (progress *Progress) run() {
 	}
 
 	progress.finished <- true
+	if progress.synchronizer.logging {
+		progress.synchronizer.logger.receiver <- LogInfo{logAction: "!@#finish", logPath: ""}
+	}
+
 }
