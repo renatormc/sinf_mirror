@@ -25,7 +25,7 @@ func main() {
 	purge := parser.Flag("p", "purge", &argparse.Options{Default: false, Help: "Purge"})
 	retries := parser.Int("r", "retries", &argparse.Options{Default: 10, Help: "Specifies the number of retries on failed copies"})
 	waitTime := parser.Int("i", "wait", &argparse.Options{Default: 1, Help: "Specifies the wait time between retries, in seconds."})
-	logging := parser.String("l", "log", &argparse.Options{Default: "null", Help: "Logs into specified file. A separate disk or thumbdrive is recommend. It is not recommended to use the same disk as source or desitnation due to performance drops"})
+	logging := parser.String("l", "log", &argparse.Options{Default: "null", Help: "Directory where a log file will be created. A separate disk or thumbdrive is recommend. It is not recommended to use the same disk as source or desitnation due to performance drops"})
 	err := parser.Parse(os.Args)
 	if err != nil {
 		fmt.Print(parser.Usage(err))

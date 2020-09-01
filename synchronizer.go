@@ -290,10 +290,7 @@ func (synchronizer *Synchronizer) copyOrReplaceFile(relPath string) {
 		return
 	}
 	desttInfo, err := os.Stat(destPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Não foi possível copiar o arquivo \"%s\"\n", sourcePath)
-		return
-	}
+
 	// Arquivo novo
 	if os.IsNotExist(err) {
 		if synchronizer.verbose {
