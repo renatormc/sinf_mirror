@@ -25,6 +25,7 @@ func main() {
 	purge := parser.Flag("p", "purge", &argparse.Options{Default: false, Help: "Purge"})
 	retries := parser.Int("r", "retries", &argparse.Options{Default: 10, Help: "Specifies the number of retries on failed copies"})
 	waitTime := parser.Int("i", "wait", &argparse.Options{Default: 1, Help: "Specifies the wait time between retries, in seconds."})
+	logging := parser.String("l", "log", &argparse.Options{Default: "null", Help: "Logs into specified file. A separate disk or thumbdrive is recommend. It is not recommended to use the same disk as source or desitnation due to performance drops"})
 	err := parser.Parse(os.Args)
 	if err != nil {
 		fmt.Print(parser.Usage(err))
@@ -74,10 +75,38 @@ func main() {
 	fmt.Printf("Total bytes: %s\n", humanize.Bytes(uint64(progress.totalSize)))
 
 	fmt.Println("Sincronizando...")
+
+	//initializing logger
+	if *logging == "null" {
+		fmt.Printf("Logging is not enabled\n")
+		synchronizer.logging = false
+	} else {
+		fmt.Printf("Logging into folder %s\n", *logging)
+		synchronizer.logging = true
+		var l Logger                             // creates  logger variable
+		synchronizer.logger = l                  //sets synchronizer logger variable
+		synchronizer.logger.logOutput = *logging //sets logging folder
+		synchronizer.logger.init()
+		if synchronizer.logger.logging {
+			go synchronizer.logger.run() //launches logger
+
+		} else {
+			*logging = "null"            //disables MAIN logging flag
+			synchronizer.logging = false //disables syncronyzer logging flag
+		}
+
+	}
+
 	go progress.run()
 	go synchronizer.run()
 
 	<-progress.finished
+
+	//waiting logging operations to be finished
+	if *logging != "null" {
+		<-synchronizer.logger.finishedLogging
+		fmt.Println("Logging operations finished")
+	}
 
 	fmt.Printf("\nTamanho total:           %s\n", humanize.Bytes(uint64(progress.totalSize)))
 	fmt.Printf("Arquivos analisados:     %d\n", progress.totalNumber)

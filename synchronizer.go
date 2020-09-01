@@ -33,6 +33,8 @@ type Synchronizer struct {
 	acknowledgeDone chan bool       // Canal cuja função é ser utilizado pelos workers para informar o sincronizador que uma cópia de arquivo grande foi finalizada
 	finished        chan bool       // Canal cuja função é ser utilizado pelo gerenciador de progresso para informar o sincronizador que o trabalho de sincronização terminou
 	wg              sync.WaitGroup  // Este objeto é utlizado pelo sincronizador para garantir que não tem nem um workers trabalhando ainda
+	logger          Logger          //utilizado para usar o canal de comunicação do logger
+	logging         bool
 }
 
 func (synchronizer *Synchronizer) init() {
@@ -47,6 +49,7 @@ func (synchronizer *Synchronizer) init() {
 func (synchronizer *Synchronizer) run() {
 
 	synchronizer.acknowledgeDone = make(chan bool)
+	//não devia estar no init?
 
 	//Cria a pasta de destino caso ela não exista
 	_, err := os.Stat(synchronizer.dest)
@@ -128,7 +131,7 @@ func (synchronizer *Synchronizer) updateRecursively(path string) {
 
 			// Aguardar copia de arquivo grande
 			if jobConfig.acknowledge {
-				if size > 1073741824 {
+				if size > synchronizer.threshold {
 					fmt.Printf("Aguardando arquivo grande: %s %s\n", relPath, humanize.Bytes(uint64(size)))
 				}
 				<-synchronizer.acknowledgeDone
@@ -265,6 +268,16 @@ func (synchronizer *Synchronizer) purgeItems(path string) {
 	}
 }
 
+func (synchronizer *Synchronizer) sendIfLogging(data LogInfo) {
+	if synchronizer.logging {
+		synchronizer.logger.receiver <- data //sends data LogInfo into logger channel
+		//fmt.Println(data.logPath + " <- logging path ")
+	} else {
+		//fmt.Println("Not logging")
+	}
+
+}
+
 //Compara arquivo na fonte com destino se for diferente ou não existir copia o novo
 func (synchronizer *Synchronizer) copyOrReplaceFile(relPath string) {
 
@@ -290,6 +303,15 @@ func (synchronizer *Synchronizer) copyOrReplaceFile(relPath string) {
 		err := synchronizer.copyFile(sourcePath, destPath, &resultData)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Não foi possível copiar o arquivo \"%s\"\n", sourcePath)
+			var log LogInfo
+			log.logPath = destPath
+			log.logAction = "Failed newfile,"
+			synchronizer.sendIfLogging(log)
+		} else {
+			var log LogInfo
+			log.logPath = destPath
+			log.logAction = "New,"
+			synchronizer.sendIfLogging(log)
 		}
 		// checkError(err)
 		//Arquivo modificado
@@ -301,6 +323,15 @@ func (synchronizer *Synchronizer) copyOrReplaceFile(relPath string) {
 		err := synchronizer.copyFile(sourcePath, destPath, &resultData)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Não foi possível copiar o arquivo \"%s\"\n", sourcePath)
+			var log LogInfo
+			log.logPath = destPath
+			log.logAction = "Failed update,"
+			synchronizer.sendIfLogging(log)
+		} else {
+			var log LogInfo
+			log.logPath = destPath
+			log.logAction = "Updated,"
+			synchronizer.sendIfLogging(log)
 		}
 		// checkError(err)
 		// Arquivo igual
@@ -309,6 +340,10 @@ func (synchronizer *Synchronizer) copyOrReplaceFile(relPath string) {
 		resultData.n = 1
 		resultData.size = sourceInfo.Size()
 		synchronizer.results <- resultData
+		var log LogInfo
+		log.logPath = destPath
+		log.logAction = "Up to date,"
+		synchronizer.sendIfLogging(log)
 	}
 
 }
