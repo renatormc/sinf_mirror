@@ -1,4 +1,4 @@
 .vscode
-compile_run.bat
-build.bat
 teste.txt
+exedir/main.exe
+exedir/main
